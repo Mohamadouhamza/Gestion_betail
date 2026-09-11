@@ -7,7 +7,6 @@ import '../providers/troupeau_provider.dart';
 class InventaireScreen extends StatefulWidget {
   final CategorieAnimal? categorie;
   const InventaireScreen({super.key, this.categorie});
-
   @override
   State<InventaireScreen> createState() => _InventaireScreenState();
 }
@@ -28,14 +27,7 @@ class _InventaireScreenState extends State<InventaireScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Inventaire ${_filtreCategorie?.label ?? ''}',
-          style: GoogleFonts.poppins(),
-        ),
-        backgroundColor: Colors.green.shade700,
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: Text('Inventaire ${_filtreCategorie?.label ?? ''}', style: GoogleFonts.poppins()), backgroundColor: Colors.green.shade700, foregroundColor: Colors.white),
       body: Column(
         children: [
           Container(
@@ -43,55 +35,10 @@ class _InventaireScreenState extends State<InventaireScreen> {
             color: Colors.white,
             child: Column(
               children: [
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      FilterChip(
-                        label: const Text('Tous'),
-                        selected: _filtreCategorie == null,
-                        onSelected: (_) {
-                          setState(() => _filtreCategorie = null);
-                          context.read<TroupeauProvider>().chargerLots();
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      ...CategorieAnimal.values.map((cat) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            label: Text(cat.label),
-                            selected: _filtreCategorie == cat,
-                            onSelected: (_) {
-                              setState(() => _filtreCategorie = cat);
-                              context.read<TroupeauProvider>().chargerLots();
-                            },
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
+                SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [FilterChip(label: const Text('Tous'), selected: _filtreCategorie == null, onSelected: (_) { setState(() => _filtreCategorie = null); context.read<TroupeauProvider>().chargerLots(); }), const SizedBox(width: 8), ...CategorieAnimal.values.map((cat) => Padding(padding: const EdgeInsets.only(right: 8), child: FilterChip(label: Text(cat.label), selected: _filtreCategorie == cat, onSelected: (_) { setState(() => _filtreCategorie = cat); context.read<TroupeauProvider>().chargerLots(); })))])),
                 if (_filtreCategorie == CategorieAnimal.taurion) ...[
                   const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: FiltreAge.values.map((age) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(age.label),
-                            selected: _filtreAge == age,
-                            onSelected: (_) {
-                              setState(() => _filtreAge = age);
-                              context.read<TroupeauProvider>().setFiltreAge(age);
-                            },
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
+                  SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: FiltreAge.values.map((age) => Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(age.label), selected: _filtreAge == age, onSelected: (_) { setState(() => _filtreAge = age); context.read<TroupeauProvider>().setFiltreAge(age); }))).toList())),
                 ],
               ],
             ),
@@ -99,26 +46,8 @@ class _InventaireScreenState extends State<InventaireScreen> {
           Expanded(
             child: Consumer<TroupeauProvider>(
               builder: (context, provider, child) {
-                final lots = _filtreCategorie == null
-                    ? provider.lots
-                    : provider.lots.where((l) => l.categorie == _filtreCategorie).toList();
-
-                if (lots.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade400),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Aucun lot dans cette catégorie',
-                          style: GoogleFonts.poppins(color: Colors.grey.shade600),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
+                final lots = _filtreCategorie == null ? provider.lots : provider.lots.where((l) => l.categorie == _filtreCategorie).toList();
+                if (lots.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade400), const SizedBox(height: 16), Text('Aucun lot', style: GoogleFonts.poppins(color: Colors.grey.shade600))]));
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: lots.length,
@@ -127,36 +56,10 @@ class _InventaireScreenState extends State<InventaireScreen> {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: _getColorForCategorie(lot.categorie),
-                          child: Text(
-                            lot.categorie.code,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        title: Text(
-                          '${lot.quantite} ${lot.categorie.label}(s)',
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Âge : ${lot.ageAffichage}'),
-                            if (lot.notes != null) Text('Note : ${lot.notes}', style: TextStyle(color: Colors.grey.shade600)),
-                          ],
-                        ),
-                        trailing: lot.categorie == CategorieAnimal.vache
-                            ? IconButton(
-                                icon: Icon(
-                                  Icons.pregnant_woman,
-                                  color: lot.enGestation ? Colors.pink : Colors.grey,
-                                ),
-                                tooltip: lot.enGestation ? 'En gestation' : 'Marquer gestation',
-                                onPressed: () {
-                                  _showGestationDialog(context, lot);
-                                },
-                              )
-                            : null,
+                        leading: CircleAvatar(backgroundColor: _getColorForCategorie(lot.categorie), child: Text(lot.categorie.code, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                        title: Text('${lot.quantite} ${lot.categorie.label}(s)', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Âge : ${lot.ageAffichage}'), if (lot.notes != null) Text('Note : ${lot.notes}', style: TextStyle(color: Colors.grey.shade600))]),
+                        trailing: lot.categorie == CategorieAnimal.vache ? IconButton(icon: Icon(Icons.pregnant_woman, color: lot.enGestation ? Colors.pink : Colors.grey), tooltip: lot.enGestation ? 'En gestation' : 'Marquer', onPressed: () { _showGestationDialog(context, lot); }) : null,
                       ),
                     );
                   },
@@ -187,45 +90,16 @@ class _InventaireScreenState extends State<InventaireScreen> {
         bool gest = lot.enGestation;
         return AlertDialog(
           title: Text('Gestation', style: GoogleFonts.poppins()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SwitchListTile(
-                title: const Text('En gestation'),
-                value: gest,
-                onChanged: (v) => gest = v,
-              ),
-              ListTile(
-                title: Text('Date : ${dateGest?.day}/${dateGest?.month}/${dateGest?.year}'),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: ctx,
-                    initialDate: dateGest,
-                    firstDate: DateTime.now().subtract(const Duration(days: 300)),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) dateGest = picked;
-                },
-              ),
-            ],
-          ),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            SwitchListTile(title: const Text('En gestation'), value: gest, onChanged: (v) => gest = v),
+            ListTile(title: Text('Date : ${dateGest.day}/${dateGest.month}/${dateGest.year}'), trailing: const Icon(Icons.calendar_today), onTap: () async { final picked = await showDatePicker(context: ctx, initialDate: dateGest, firstDate: DateTime.now().subtract(const Duration(days: 300)), lastDate: DateTime.now()); if (picked != null) dateGest = picked; }),
+          ]),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                context.read<TroupeauProvider>().toggleGestation(lot, gest, gest ? dateGest : null);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Valider'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+            ElevatedButton(onPressed: () { context.read<TroupeauProvider>().toggleGestation(lot, gest, gest ? dateGest : null); Navigator.pop(ctx); }, child: const Text('Valider')),
           ],
         );
       },
     );
   }
 }
-

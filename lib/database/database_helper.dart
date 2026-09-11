@@ -22,7 +22,7 @@ class DatabaseHelper {
   }
 
   Future _createDB(Database db, int version) async {
-    await db.execute('''
+    await db.execute('''\
       CREATE TABLE proprietaires (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nom TEXT NOT NULL,
@@ -31,7 +31,7 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.execute('''
+    await db.execute('''\
       CREATE TABLE troupeaux (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nom TEXT NOT NULL,
@@ -39,7 +39,7 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.execute('''
+    await db.execute('''\
       CREATE TABLE lots (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         troupeauId INTEGER NOT NULL,
@@ -53,7 +53,7 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.execute('''
+    await db.execute('''\
       CREATE TABLE mouvements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         troupeauId INTEGER NOT NULL,
@@ -67,6 +67,7 @@ class DatabaseHelper {
       )
     ''');
 
+    // Données de test
     await db.insert('proprietaires', {'nom': 'ABDOUL'});
     await db.insert('proprietaires', {'nom': 'ALI'});
     await db.insert('troupeaux', {'nom': 'Troupeau AH', 'code': 'AH'});
@@ -241,7 +242,7 @@ class DatabaseHelper {
     }
 
     final whereClause = conditions.isNotEmpty ? 'WHERE ${conditions.join(' AND ')}' : '';
-    final maps = await db.rawQuery('''
+    final maps = await db.rawQuery('''\
       SELECT categorie, SUM(quantite) as total 
       FROM lots 
       $whereClause
@@ -274,10 +275,10 @@ class DatabaseHelper {
     gestConditions.add("categorie = 'V'");
     gestConditions.add('enGestation = 1');
 
-    final gestMaps = await db.rawQuery('''
+    final gestMaps = await db.rawQuery('''\
       SELECT SUM(quantite) as total 
       FROM lots 
-      WHERE ${gestConditions.join(' AND ')}
+      WHERE ${gestConditions.join(' AND ')}\
     ''', gestArgs);
     gest = (gestMaps.first['total'] as num?)?.toInt() ?? 0;
 
