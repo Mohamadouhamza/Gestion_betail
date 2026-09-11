@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/troupeau_provider.dart';
 
 class FicheScreen extends StatelessWidget {
-  const FicheScreen({super.key});
+  const FicheScreen({super.key}); 
 
   @override
   Widget build(BuildContext context) {
