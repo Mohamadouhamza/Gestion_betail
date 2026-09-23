@@ -20,8 +20,16 @@ class FicheScreen extends StatelessWidget {
         backgroundColor: Colors.brown.shade700,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(icon: const Icon(Icons.picture_as_pdf), tooltip: 'Exporter PDF', onPressed: () => _exportPDF(context)),
-          IconButton(icon: const Icon(Icons.table_chart), tooltip: 'Exporter Excel', onPressed: () => _exportExcel(context)),
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            tooltip: 'Exporter PDF',
+            onPressed: () => _exportPDF(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.table_chart),
+            tooltip: 'Exporter Excel',
+            onPressed: () => _exportExcel(context),
+          ),
         ],
       ),
       body: Consumer<TroupeauProvider>(
@@ -44,15 +52,47 @@ class FicheScreen extends StatelessWidget {
                     child: DataTable(
                       headingRowColor: MaterialStateProperty.all(Colors.brown.shade100),
                       border: TableBorder.all(color: Colors.grey.shade300),
-                      columns: const [DataColumn(label: Text('DATE')), DataColumn(label: Text('MOUVEMENT')), DataColumn(label: Text('CAT.')), DataColumn(label: Text('QTÉ'), numeric: true), DataColumn(label: Text('SENS')), DataColumn(label: Text('OBS'))],
+                      columns: const [
+                        DataColumn(label: Text('DATE')),
+                        DataColumn(label: Text('MOUVEMENT')),
+                        DataColumn(label: Text('CAT.')),
+                        DataColumn(label: Text('QTÉ'), numeric: true),
+                        DataColumn(label: Text('SENS')),
+                        DataColumn(label: Text('OBS'))
+                      ],
                       rows: [
-                        DataRow(color: MaterialStateProperty.all(Colors.green.shade50), cells: [DataCell(Text(DateFormat('dd/MM/yy').format(DateTime.now()))), const DataCell(Text('SITUATION ACTUELLE', style: TextStyle(fontWeight: FontWeight.bold))), const DataCell(Text('TOT')), DataCell(Text('${situation.total}', style: const TextStyle(fontWeight: FontWeight.bold))), const DataCell(Text('–')), const DataCell(Text('Stock actuel'))]),
+                        DataRow(
+                          color: MaterialStateProperty.all(Colors.green.shade50),
+                          cells: [
+                            DataCell(Text(DateFormat('dd/MM/yy').format(DateTime.now()))),
+                            const DataCell(Text('SITUATION ACTUELLE', style: TextStyle(fontWeight: FontWeight.bold))),
+                            const DataCell(Text('TOT')),
+                            DataCell(Text('${situation.total}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                            const DataCell(Text('–')),
+                            const DataCell(Text('Stock actuel'))
+                          ],
+                        ),
                         ...mouvements.map((m) => DataRow(cells: [
                           DataCell(Text(DateFormat('dd/MM/yy').format(m.date))),
                           DataCell(Text(m.type.label)),
                           DataCell(Text(m.categorie.code)),
                           DataCell(Text('${m.quantite}')),
-                          DataCell(Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: m.type.sens == 'entree' ? Colors.green.shade100 : Colors.red.shade100, borderRadius: BorderRadius.circular(4)), child: Text(m.type.sens == 'entree' ? '+' : '–', style: TextStyle(color: m.type.sens == 'entree' ? Colors.green.shade800 : Colors.red.shade800, fontWeight: FontWeight.bold)))),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: m.type.sens == 'entree' ? Colors.green.shade100 : Colors.red.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                m.type.sens == 'entree' ? '+' : '–',
+                                style: TextStyle(
+                                  color: m.type.sens == 'entree' ? Colors.green.shade800 : Colors.red.shade800,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
                           DataCell(Text(m.notes ?? '')),
                         ])),
                       ],
@@ -88,7 +128,12 @@ class FicheScreen extends StatelessWidget {
       width: 80,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: couleur.withOpacity(0.1), border: Border.all(color: couleur), borderRadius: BorderRadius.circular(8)),
-      child: Column(children: [Text(code, style: TextStyle(color: couleur, fontWeight: FontWeight.bold, fontSize: 18)), Text('$valeur', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: couleur.withOpacity(0.8)))]),
+      child: Column(
+        children: [
+          Text(code, style: TextStyle(color: couleur, fontWeight: FontWeight.bold, fontSize: 18)),
+          Text('$valeur', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: couleur.withOpacity(0.8))),
+        ],
+      ),
     );
   }
 
@@ -113,29 +158,65 @@ class FicheScreen extends StatelessWidget {
                 children: [
                   pw.TableRow(
                     decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8D4C0')),
-                    children: [pw.Text('DATE'), pw.Text('MOUVEMENT'), pw.Text('CAT.'), pw.Text('QTÉ'), pw.Text('SENS'), pw.Text('OBS')].map((t) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: t)).toList(),
+                    children: [
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('DATE')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('MOUVEMENT')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('CAT.')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('QTÉ')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('SENS')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('OBS')),
+                    ],
                   ),
                   pw.TableRow(
                     decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8F5E9')),
                     children: [
-                      pw.Text(DateFormat('dd/MM/yy').format(DateTime.now())),
-                      pw.Text('SITUATION ACTUELLE'),
-                      pw.Text('TOT'),
-                      pw.Text('${situation.total}'),
-                      pw.Text('–'),
-                      pw.Text('Stock actuel'),
-                    ].map((t) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: t)).toList(),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(DateFormat('dd/MM/yy').format(DateTime.now()))),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('SITUATION ACTUELLE')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('TOT')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${situation.total}')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('–')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Stock actuel')),
+                    ],
                   ),
                   ...mouvements.map((m) => pw.TableRow(
                     children: [
-                      pw.Text(DateFormat('dd/MM/yy').format(m.date)),
-                      pw.Text(m.type.label),
-                      pw.Text(m.categorie.code),
-                      pw.Text('${m.quantite}'),
-                      pw.Text(m.type.sens == 'entree' ? '+' : '–'),
-                      pw.Text(m.notes ?? ''),
-                    ].map((t) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: t)).toList(),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(DateFormat('dd/MM/yy').format(m.date))),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(m.type.label)),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(m.categorie.code)),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${m.quantite}')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(m.type.sens == 'entree' ? '+' : '–')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(m.notes ?? '')),
+                    ],
                   )),
+                ],
+              ),
+              pw.SizedBox(height: 16),
+              pw.Text('SITUATION PAR CATÉGORIE', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.Table(
+                border: pw.TableBorder.all(),
+                children: [
+                  pw.TableRow(
+                    children: [
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('T')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('G')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('V')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('VM')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('VF')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('GEST')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('TOT')),
+                    ],
+                  ),
+                  pw.TableRow(
+                    children: [
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${situation.taurions}')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${situation.genisses}')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${situation.vaches}')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${situation.veauxMales}')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${situation.veauxFemelles}')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${situation.gestation}')),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${situation.total}')),
+                    ],
+                  ),
                 ],
               ),
             ],
@@ -148,9 +229,13 @@ class FicheScreen extends StatelessWidget {
       final file = File('${directory.path}/$filename');
       await file.writeAsBytes(await pdf.save());
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PDF sauvegardé : $filename')));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PDF sauvegardé : $filename')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur : $e')));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur PDF : $e')));
+      }
     }
   }
 
@@ -160,47 +245,91 @@ class FicheScreen extends StatelessWidget {
       final mouvements = provider.mouvementsRecents..sort((a, b) => a.date.compareTo(b.date));
       final situation = provider.situation;
 
+      // Créer un workbook Excel
       var excelSheet = excel.Excel.createExcel();
-      var sheet = excelSheet['Fiche'];
+      var sheet = excelSheet['Sheet1'];
+      
+      // Supprimer la feuille par défaut et créer la nôtre
+      excelSheet.rename('Sheet1', 'Fiche');
+      sheet = excelSheet['Fiche'];
 
-      sheet.appendRow(['FICHE DE SUIVI DE L\'ÉVOLUTION DU BÉTAIL']);
-      sheet.appendRow(['Troupeau : ${provider.troupeauSelectionne?.nom ?? '-'}', 'Propriétaire : ${provider.proprietaireSelectionne?.nom ?? '-'}']);
-      sheet.appendRow([]);
+      // En-tête
+      sheet.insertRowIterables([
+        ['FICHE DE SUIVI DE L\'ÉVOLUTION DU BÉTAIL'],
+      ], 0);
+      sheet.insertRowIterables([
+        ['Troupeau : ${provider.troupeauSelectionne?.nom ?? '-'}', 'Propriétaire : ${provider.proprietaireSelectionne?.nom ?? '-'}'],
+      ], 1);
+      sheet.insertRowIterables([
+        [],
+      ], 2);
 
-      sheet.appendRow(['DATE', 'MOUVEMENT', 'CAT.', 'QTÉ', 'SENS', 'OBS']);
-      sheet.appendRow([
-        DateFormat('dd/MM/yy').format(DateTime.now()),
-        'SITUATION ACTUELLE',
-        'TOT',
-        situation.total,
-        '–',
-        'Stock actuel',
-      ]);
+      // En-têtes table
+      sheet.insertRowIterables([
+        ['DATE', 'MOUVEMENT', 'CAT.', 'QTÉ', 'SENS', 'OBS'],
+      ], 3);
 
+      // Situation actuelle
+      sheet.insertRowIterables([
+        [
+          DateFormat('dd/MM/yy').format(DateTime.now()),
+          'SITUATION ACTUELLE',
+          'TOT',
+          situation.total,
+          '–',
+          'Stock actuel',
+        ],
+      ], 4);
+
+      // Mouvements
+      int rowIndex = 5;
       for (var m in mouvements) {
-        sheet.appendRow([
-          DateFormat('dd/MM/yy').format(m.date),
-          m.type.label,
-          m.categorie.code,
-          m.quantite,
-          m.type.sens == 'entree' ? '+' : '–',
-          m.notes ?? '',
-        ]);
+        sheet.insertRowIterables([
+          [
+            DateFormat('dd/MM/yy').format(m.date),
+            m.type.label,
+            m.categorie.code,
+            m.quantite,
+            m.type.sens == 'entree' ? '+' : '–',
+            m.notes ?? '',
+          ],
+        ], rowIndex);
+        rowIndex++;
       }
 
-      sheet.appendRow([]);
-      sheet.appendRow(['SITUATION PAR CATÉGORIE']);
-      sheet.appendRow(['T', 'G', 'V', 'VM', 'VF', 'GEST', 'TOT']);
-      sheet.appendRow([situation.taurions, situation.genisses, situation.vaches, situation.veauxMales, situation.veauxFemelles, situation.gestation, situation.total]);
+      // Situation par catégorie
+      rowIndex += 1;
+      sheet.insertRowIterables([
+        ['SITUATION PAR CATÉGORIE'],
+      ], rowIndex);
+      rowIndex++;
 
+      sheet.insertRowIterables([
+        ['T', 'G', 'V', 'VM', 'VF', 'GEST', 'TOT'],
+      ], rowIndex);
+      rowIndex++;
+
+      sheet.insertRowIterables([
+        [situation.taurions, situation.genisses, situation.vaches, situation.veauxMales, situation.veauxFemelles, situation.gestation, situation.total],
+      ], rowIndex);
+
+      // Sauvegarder
       final directory = await getApplicationDocumentsDirectory();
       final filename = 'Fiche_${provider.troupeauSelectionne?.nom ?? 'betail'}_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.xlsx';
       final file = File('${directory.path}/$filename');
-      await file.writeAsBytes(excelSheet.encode()!);
+      
+      var bytes = excelSheet.encode();
+      if (bytes != null) {
+        await file.writeAsBytes(bytes);
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel sauvegardé : $filename')));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel sauvegardé : $filename')));
+        }
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur : $e')));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur Excel : $e')));
+      }
     }
   }
 }
