@@ -86,7 +86,7 @@ class _InventaireScreenState extends State<InventaireScreen> {
     showDialog(
       context: context,
       builder: (ctx) {
-        DateTime? dateGest = lot.dateGestation ?? DateTime.now();
+        DateTime dateGest = lot.dateGestation ?? DateTime.now();
         bool gest = lot.enGestation;
         return AlertDialog(
           title: Text('Gestation', style: GoogleFonts.poppins()),
