@@ -415,7 +415,7 @@ class FicheScreen extends StatelessWidget {
     );
   }
 
-  /*
+    /*
    * Convertit une valeur Dart en CellValue compatible avec
    * excel: 4.0.6.
    */
@@ -425,7 +425,11 @@ class FicheScreen extends StatelessWidget {
     }
 
     if (value is int) {
-      return excel      return excel.DoubleCellValue(value);
+      return excel.IntCellValue(value);
+    }
+
+    if (value is double) {
+      return excel.DoubleCellValue(value);
     }
 
     if (value is bool) {
@@ -457,12 +461,6 @@ class FicheScreen extends StatelessWidget {
       excelFile.rename('Sheet1', 'Fiche');
 
       final sheet = excelFile['Fiche'];
-
-      /*
-       * Important :
-       * insertRowIterables reçoit directement une liste de CellValue.
-       * Il ne faut pas envoyer [[...]], mais seulement [...].
-       */
 
       // Titre
       sheet.insertRowIterables(
@@ -496,7 +494,13 @@ class FicheScreen extends StatelessWidget {
           'CAT.',
           'QTÉ',
           'SENS',
-          '      sheet.insertRowIterables(
+          'OBS',
+        ]),
+        3,
+      );
+
+      // Situation actuelle
+      sheet.insertRowIterables(
         _excelRow([
           DateFormat('dd/MM/yy').format(DateTime.now()),
           'SITUATION ACTUELLE',
@@ -518,7 +522,8 @@ class FicheScreen extends StatelessWidget {
             mouvement.type.label,
             mouvement.categorie.code,
             mouvement.quantite,
-            mouvement.type.s ?? '',
+            mouvement.type.sens == 'entree' ? '+' : '–',
+            mouvement.notes ?? '',
           ]),
           rowIndex,
         );
@@ -566,7 +571,14 @@ class FicheScreen extends StatelessWidget {
           situation.gestation,
           situation.total,
         ]),
- '${DateFormat('yyyy-MM-dd').format(DateTime.now())}.xlsx';
+        rowIndex,
+      );
+
+      final directory = await getApplicationDocumentsDirectory();
+
+      final filename =
+          'Fiche_${provider.troupeauSelectionne?.nom ?? 'betail'}_'
+          '${DateFormat('yyyy-MM-dd').format(DateTime.now())}.xlsx';
 
       final file = File('${directory.path}/$filename');
 
@@ -593,6 +605,6 @@ class FicheScreen extends StatelessWidget {
           ),
         );
       }
-   CellValue(...)
-excel.DoubleCellValue(...)
-excel.BoolCellValue(...)
+    }
+  }
+}
