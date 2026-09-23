@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:excel/excel.dart' as excel;
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../providers/troupeau_provider.dart';
 
 class FicheScreen extends StatelessWidget {
@@ -10,7 +15,15 @@ class FicheScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Fiche de suivi', style: GoogleFonts.poppins()), backgroundColor: Colors.brown.shade700, foregroundColor: Colors.white),
+      appBar: AppBar(
+        title: Text('Fiche de suivi', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        backgroundColor: Colors.brown.shade700,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(icon: const Icon(Icons.picture_as_pdf), tooltip: 'Exporter PDF', onPressed: () => _exportPDF(context)),
+          IconButton(icon: const Icon(Icons.table_chart), tooltip: 'Exporter Excel', onPressed: () => _exportExcel(context)),
+        ],
+      ),
       body: Consumer<TroupeauProvider>(
         builder: (context, provider, child) {
           final mouvements = provider.mouvementsRecents..sort((a, b) => a.date.compareTo(b.date));
@@ -77,5 +90,117 @@ class FicheScreen extends StatelessWidget {
       decoration: BoxDecoration(color: couleur.withOpacity(0.1), border: Border.all(color: couleur), borderRadius: BorderRadius.circular(8)),
       child: Column(children: [Text(code, style: TextStyle(color: couleur, fontWeight: FontWeight.bold, fontSize: 18)), Text('$valeur', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: couleur.withOpacity(0.8)))]),
     );
+  }
+
+  void _exportPDF(BuildContext context) async {
+    try {
+      final provider = context.read<TroupeauProvider>();
+      final mouvements = provider.mouvementsRecents..sort((a, b) => a.date.compareTo(b.date));
+      final situation = provider.situation;
+
+      final pdf = pw.Document();
+
+      pdf.addPage(
+        pw.Page(
+          build: (pw.Context context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('FICHE DE SUIVI DE L\'ÉVOLUTION DU BÉTAIL', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+              pw.Text('Troupeau : ${provider.troupeauSelectionne?.nom ?? '-'} | Propriétaire : ${provider.proprietaireSelectionne?.nom ?? '-'}', style: const pw.TextStyle(fontSize: 12)),
+              pw.SizedBox(height: 16),
+              pw.Table(
+                border: pw.TableBorder.all(),
+                children: [
+                  pw.TableRow(
+                    decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8D4C0')),
+                    children: [pw.Text('DATE'), pw.Text('MOUVEMENT'), pw.Text('CAT.'), pw.Text('QTÉ'), pw.Text('SENS'), pw.Text('OBS')].map((t) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: t)).toList(),
+                  ),
+                  pw.TableRow(
+                    decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8F5E9')),
+                    children: [
+                      pw.Text(DateFormat('dd/MM/yy').format(DateTime.now())),
+                      pw.Text('SITUATION ACTUELLE'),
+                      pw.Text('TOT'),
+                      pw.Text('${situation.total}'),
+                      pw.Text('–'),
+                      pw.Text('Stock actuel'),
+                    ].map((t) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: t)).toList(),
+                  ),
+                  ...mouvements.map((m) => pw.TableRow(
+                    children: [
+                      pw.Text(DateFormat('dd/MM/yy').format(m.date)),
+                      pw.Text(m.type.label),
+                      pw.Text(m.categorie.code),
+                      pw.Text('${m.quantite}'),
+                      pw.Text(m.type.sens == 'entree' ? '+' : '–'),
+                      pw.Text(m.notes ?? ''),
+                    ].map((t) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: t)).toList(),
+                  )),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final directory = await getApplicationDocumentsDirectory();
+      final filename = 'Fiche_${provider.troupeauSelectionne?.nom ?? 'betail'}_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf';
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(await pdf.save());
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PDF sauvegardé : $filename')));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur : $e')));
+    }
+  }
+
+  void _exportExcel(BuildContext context) async {
+    try {
+      final provider = context.read<TroupeauProvider>();
+      final mouvements = provider.mouvementsRecents..sort((a, b) => a.date.compareTo(b.date));
+      final situation = provider.situation;
+
+      var excelSheet = excel.Excel.createExcel();
+      var sheet = excelSheet['Fiche'];
+
+      sheet.appendRow(['FICHE DE SUIVI DE L\'ÉVOLUTION DU BÉTAIL']);
+      sheet.appendRow(['Troupeau : ${provider.troupeauSelectionne?.nom ?? '-'}', 'Propriétaire : ${provider.proprietaireSelectionne?.nom ?? '-'}']);
+      sheet.appendRow([]);
+
+      sheet.appendRow(['DATE', 'MOUVEMENT', 'CAT.', 'QTÉ', 'SENS', 'OBS']);
+      sheet.appendRow([
+        DateFormat('dd/MM/yy').format(DateTime.now()),
+        'SITUATION ACTUELLE',
+        'TOT',
+        situation.total,
+        '–',
+        'Stock actuel',
+      ]);
+
+      for (var m in mouvements) {
+        sheet.appendRow([
+          DateFormat('dd/MM/yy').format(m.date),
+          m.type.label,
+          m.categorie.code,
+          m.quantite,
+          m.type.sens == 'entree' ? '+' : '–',
+          m.notes ?? '',
+        ]);
+      }
+
+      sheet.appendRow([]);
+      sheet.appendRow(['SITUATION PAR CATÉGORIE']);
+      sheet.appendRow(['T', 'G', 'V', 'VM', 'VF', 'GEST', 'TOT']);
+      sheet.appendRow([situation.taurions, situation.genisses, situation.vaches, situation.veauxMales, situation.veauxFemelles, situation.gestation, situation.total]);
+
+      final directory = await getApplicationDocumentsDirectory();
+      final filename = 'Fiche_${provider.troupeauSelectionne?.nom ?? 'betail'}_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.xlsx';
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(excelSheet.encode()!);
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Excel sauvegardé : $filename')));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur : $e')));
+    }
   }
 }

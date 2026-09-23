@@ -2,63 +2,58 @@ name: Build APK
 
 on:
   push:
-    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup Java
-      uses: actions/setup-java@v3
-      with:
-        distribution: 'temurin'
-        java-version: '11'
-    
-    - name: Setup Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.13.0'
-        cache: true
-    
-    - name: Verify Android structure
-      run: |
-        if [ ! -f "android/app/src/main/AndroidManifest.xml" ]; then
-          echo "Creating Android structure..."
-          flutter create --platforms android . --project-name gestion_betail
-        else
-          echo "Android structure OK"
-        fi
-    
-    - name: Clean
-      run: flutter clean
-    
-    - name: Get dependencies
-      run: flutter pub get
-    
-    - name: Build APK Debug
-      run: flutter build apk --debug
-    
-    - name: Build APK Release
-      run: flutter build apk --release
-    
-    - name: Upload Debug APK
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug
-        path: build/app/outputs/apk/debug/app-debug.apk
-        retention-days: 7
-    
-    - name: Upload Release APK
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-release
-        path: build/app/outputs/apk/release/app-release.apk
-        retention-days: 30
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: Installer Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.13.0"
+          cache: true
+
+      - name: Régénérer la plateforme Android
+        run: flutter create --platforms=android . --project-name gestion_betail
+
+      - name: Vérifier la structure du projet
+        run: |
+          pwd
+          ls -la
+          find android -maxdepth 5 -name "AndroidManifest.xml" -print
+
+      - name: Nettoyer le projet
+        run: flutter clean
+
+      - name: Installer les dépendances
+        run: flutter pub get
+
+      - name: Construire l'APK debug
+        run: flutter build apk --debug
+
+      - name: Construire l'APK release
+        run: flutter build apk --release
+
+      - name: Publier l'APK debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Publier l'APK release
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
