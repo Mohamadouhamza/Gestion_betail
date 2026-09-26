@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'providers/troupeau_provider.dart';
+import 'theme/app_colors.dart';
 import 'widgets/bottom_nav.dart';
 
 void main() {
@@ -22,11 +23,13 @@ class MyApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.green.shade700,
+            seedColor: AppColors.vertPrincipal,
             brightness: Brightness.light,
           ),
+          scaffoldBackgroundColor: AppColors.fondEcran,
           textTheme: GoogleFonts.poppinsTextTheme(),
           appBarTheme: AppBarTheme(
+            backgroundColor: AppColors.vertPrincipal,
             centerTitle: true,
             elevation: 0,
             titleTextStyle: GoogleFonts.poppins(

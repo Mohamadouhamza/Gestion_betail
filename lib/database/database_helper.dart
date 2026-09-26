@@ -147,6 +147,36 @@ class DatabaseHelper {
     }, where: 'id = ?', whereArgs: [lotId]);
   }
 
+  /// Parcourt tous les lots en gestation et clôture automatiquement ceux
+  /// dont le terme (≈283 jours) est atteint ou dépassé.
+  /// Retourne le nombre de gestations clôturées automatiquement.
+  Future<int> cloturerGestationsTerminees() async {
+    final db = await database;
+    final maps = await db.query('lots', where: 'enGestation = 1 AND dateGestation IS NOT NULL');
+    final lots = maps.map((e) => LotAnimal.fromMap(e)).toList();
+    var count = 0;
+    for (final lot in lots) {
+      if (lot.gestationTerminee) {
+        final noteMiseAJour = [
+          if (lot.notes != null && lot.notes!.isNotEmpty) lot.notes,
+          'Gestation clôturée automatiquement le ${DateTime.now().toIso8601String().split('T').first}',
+        ].join(' • ');
+        await db.update(
+          'lots',
+          {
+            'enGestation': 0,
+            'dateGestation': null,
+            'notes': noteMiseAJour,
+          },
+          where: 'id = ?',
+          whereArgs: [lot.id],
+        );
+        count++;
+      }
+    }
+    return count;
+  }
+
   Future<List<LotAnimal>> getLots({
     int? troupeauId,
     int? proprietaireId,
@@ -223,6 +253,19 @@ class DatabaseHelper {
       whereArgs: args.isNotEmpty ? args : null,
       orderBy: 'date DESC',
       limit: limit,
+    );
+    return maps.map((e) => Mouvement.fromMap(e)).toList();
+  }
+
+  /// Récupère TOUS les mouvements d'un troupeau (tous propriétaires confondus),
+  /// triés chronologiquement (croissant), pour reconstruire la fiche de suivi.
+  Future<List<Mouvement>> getTousMouvementsPourFiche({required int troupeauId}) async {
+    final db = await database;
+    final maps = await db.query(
+      'mouvements',
+      where: 'troupeauId = ?',
+      whereArgs: [troupeauId],
+      orderBy: 'date ASC, id ASC',
     );
     return maps.map((e) => Mouvement.fromMap(e)).toList();
   }

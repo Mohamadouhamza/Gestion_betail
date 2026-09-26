@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_colors.dart';
 
 class CarteSituation extends StatelessWidget {
   final String titre;
@@ -84,7 +85,8 @@ class CarteSituation extends StatelessWidget {
 
 class CarteGestation extends StatelessWidget {
   final int valeur;
-  const CarteGestation({super.key, required this.valeur});
+  final String? detail;
+  const CarteGestation({super.key, required this.valeur, this.detail});
 
   @override
   Widget build(BuildContext context) {
@@ -99,27 +101,37 @@ class CarteGestation extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(Icons.pregnant_woman, color: Colors.pink.shade400, size: 32),
+            const GestationIcon(size: 34, color: AppColors.gestation),
             const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$valeur',
-                  style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.pink.shade700,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$valeur',
+                    style: GoogleFonts.poppins(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.pink.shade700,
+                    ),
                   ),
-                ),
-                Text(
-                  'Vaches en gestation',
-                  style: GoogleFonts.poppins(
-                    color: Colors.pink.shade600,
-                    fontSize: 14,
+                  Text(
+                    'Vaches en gestation',
+                    style: GoogleFonts.poppins(
+                      color: Colors.pink.shade600,
+                      fontSize: 14,
+                    ),
                   ),
-                ),
-              ],
+                  if (detail != null && detail!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        detail!,
+                        style: GoogleFonts.poppins(color: Colors.pink.shade400, fontSize: 12),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ],
         ),

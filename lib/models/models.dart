@@ -54,6 +54,9 @@ class LotAnimal {
   final DateTime? dateGestation;
   final String? notes;
 
+  // Durée de gestation moyenne d'une vache : ~283 jours (9 mois et 9 jours)
+  static const int dureeGestationJours = 283;
+
   LotAnimal({
     this.id,
     required this.troupeauId,
@@ -78,6 +81,45 @@ class LotAnimal {
     final reste = mois % 12;
     if (reste == 0) return '$annees an${annees > 1 ? 's' : ''}';
     return '$annees an${annees > 1 ? 's' : ''} $reste mois';
+  }
+
+  /// Date de terme prévue (accouchement) si en gestation
+  DateTime? get dateTermeGestation {
+    if (dateGestation == null) return null;
+    return dateGestation!.add(const Duration(days: dureeGestationJours));
+  }
+
+  /// Nombre de mois de gestation écoulés depuis le début
+  int? get moisGestationEcoules {
+    if (dateGestation == null) return null;
+    final now = DateTime.now();
+    var mois = (now.year - dateGestation!.year) * 12 + now.month - dateGestation!.month;
+    if (mois < 0) mois = 0;
+    return mois;
+  }
+
+  /// Nombre de jours restants avant le terme (peut être négatif si dépassé)
+  int? get joursRestantsGestation {
+    final terme = dateTermeGestation;
+    if (terme == null) return null;
+    return terme.difference(DateTime.now()).inDays;
+  }
+
+  /// Affichage lisible : "6 mois (terme dans 45 j)" ou "Terme dépassé de 3 j"
+  String get gestationAffichage {
+    if (!enGestation || dateGestation == null) return '';
+    final mois = moisGestationEcoules ?? 0;
+    final joursRestants = joursRestantsGestation ?? 0;
+    if (joursRestants < 0) {
+      return '$mois mois – terme dépassé de ${-joursRestants} j';
+    }
+    return '$mois mois – terme dans $joursRestants j';
+  }
+
+  /// Vrai si le terme de gestation est atteint ou dépassé (à clôturer automatiquement)
+  bool get gestationTerminee {
+    if (!enGestation || dateGestation == null) return false;
+    return DateTime.now().isAfter(dateTermeGestation!);
   }
 
   Map<String, dynamic> toMap() => {
@@ -184,4 +226,55 @@ class Situation {
       case CategorieAnimal.veauFemelle: return veauxFemelles;
     }
   }
+}
+
+/// Représente UNE ligne de la fiche papier (une date + un propriétaire, ou la ligne TOTAL)
+/// Reproduit exactement la structure : DATE | PROPRIET | PERTES(T,G,V,VM,VF) | VENTE(T,G,V)
+/// | ACHAT(T,G) | NAIS(M,F) | BILA | SITUATION(T,G,V,VM,VF,TOT) | GEST | DATE proj | NOM | OBS
+class FicheLigne {
+  final DateTime date;
+  final String proprietaire; // nom, ou "TOTAL"
+  final bool estTotal;
+  final bool estReport;
+
+  // MOUVEMENTS > PERTES
+  final int perteT, perteG, perteV, perteVM, perteVF;
+  // MOUVEMENTS > VENTE
+  final int venteT, venteG, venteV;
+  // MOUVEMENTS > ACHAT
+  final int achatT, achatG;
+  // MOUVEMENTS > NAIS
+  final int naisM, naisF;
+  // BILA (vérification : achats+naissances - pertes-ventes)
+  final int? bila;
+  // SITUATION A DATE
+  final int sitT, sitG, sitV, sitVM, sitVF;
+  // PROJECTIONS
+  final int gest;
+  final DateTime? dateProjection;
+  final int nom; // total projeté = TOT + GEST
+  final String observations;
+
+  FicheLigne({
+    required this.date,
+    required this.proprietaire,
+    this.estTotal = false,
+    this.estReport = false,
+    this.perteT = 0, this.perteG = 0, this.perteV = 0, this.perteVM = 0, this.perteVF = 0,
+    this.venteT = 0, this.venteG = 0, this.venteV = 0,
+    this.achatT = 0, this.achatG = 0,
+    this.naisM = 0, this.naisF = 0,
+    this.bila,
+    required this.sitT, required this.sitG, required this.sitV, required this.sitVM, required this.sitVF,
+    this.gest = 0,
+    this.dateProjection,
+    int? nom,
+    this.observations = '',
+  }) : nom = nom ?? (sitT + sitG + sitV + sitVM + sitVF + gest);
+
+  int get sitTotal => sitT + sitG + sitV + sitVM + sitVF;
+  int get totalPertes => perteT + perteG + perteV + perteVM + perteVF;
+  int get totalVentes => venteT + venteG + venteV;
+  int get totalAchats => achatT + achatG;
+  int get totalNaissances => naisM + naisF;
 }

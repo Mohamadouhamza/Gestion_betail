@@ -6,11 +6,11 @@ import 'package:provider/provider.dart';
 import '../models/enums.dart';
 import '../models/models.dart';
 import '../providers/troupeau_provider.dart';
+import '../theme/app_colors.dart';
 import '../widgets/carte_situation.dart';
 import 'fiche_screen.dart';
 import 'historique_screen.dart';
 import 'inventaire_screen.dart';
-import 'mouvement_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -18,7 +18,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: AppColors.fondEcran,
       body: Consumer<TroupeauProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading && provider.proprietaires.isEmpty) {
@@ -30,32 +30,31 @@ class HomeScreen extends StatelessWidget {
           return CustomScrollView(
             slivers: [
               SliverAppBar(
-                expandedHeight: 140,
+                expandedHeight: 120,
                 floating: true,
                 pinned: true,
+                // Fond vert PLEIN (pas de dégradé) directement sur la SliverAppBar :
+                // c'est cette couleur qui reste visible une fois l'en-tête réduit.
+                // Avant, seul le "background" du FlexibleSpaceBar était coloré ;
+                // il s'estompe pendant le scroll et laissait apparaître le blanc
+                // par défaut du thème, rendant le titre blanc illisible.
+                backgroundColor: AppColors.vertPrincipal,
+                foregroundColor: Colors.white,
+                elevation: 0,
                 flexibleSpace: FlexibleSpaceBar(
+                  titlePadding: const EdgeInsetsDirectional.only(start: 16, bottom: 14),
                   title: Text(
                     'Fiche du bétail',
                     style: GoogleFonts.poppins(
                       fontWeight: FontWeight.w600,
+                      color: Colors.white,
                     ),
                   ),
-                  background: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.green.shade700,
-                          Colors.green.shade900,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                  ),
+                  background: Container(color: AppColors.vertPrincipal),
                 ),
                 actions: [
                   IconButton(
-                    icon: const Icon(Icons.table_chart),
+                    icon: const Icon(AppIcons.fiche),
                     tooltip: 'Fiche papier',
                     onPressed: () {
                       Navigator.push(
@@ -67,7 +66,7 @@ class HomeScreen extends StatelessWidget {
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.history),
+                    icon: const Icon(AppIcons.historique),
                     tooltip: 'Historique',
                     onPressed: () {
                       Navigator.push(
@@ -98,7 +97,7 @@ class HomeScreen extends StatelessWidget {
                           children: [
                             Icon(
                               Icons.person,
-                              color: Colors.green.shade700,
+                              color: AppColors.vertPrincipal,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -151,7 +150,7 @@ class HomeScreen extends StatelessWidget {
                           children: [
                             Icon(
                               Icons.groups,
-                              color: Colors.green.shade700,
+                              color: AppColors.vertPrincipal,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -230,8 +229,8 @@ class HomeScreen extends StatelessWidget {
                       CarteSituation(
                         titre: 'Taurions',
                         valeur: provider.situation.taurions,
-                        icon: Icons.male,
-                        couleur: Colors.brown.shade600,
+                        icon: AppIcons.taurion,
+                        couleur: AppColors.taurion,
                         sousTitre: 'T',
                         onTap: () {
                           Navigator.push(
@@ -247,8 +246,8 @@ class HomeScreen extends StatelessWidget {
                       CarteSituation(
                         titre: 'Génisses',
                         valeur: provider.situation.genisses,
-                        icon: Icons.female,
-                        couleur: Colors.orange.shade600,
+                        icon: AppIcons.genisse,
+                        couleur: AppColors.genisse,
                         sousTitre: 'G',
                         onTap: () {
                           Navigator.push(
@@ -264,8 +263,8 @@ class HomeScreen extends StatelessWidget {
                       CarteSituation(
                         titre: 'Vaches',
                         valeur: provider.situation.vaches,
-                        icon: Icons.female,
-                        couleur: Colors.green.shade600,
+                        icon: AppIcons.vache,
+                        couleur: AppColors.vache,
                         sousTitre: 'V',
                         onTap: () {
                           Navigator.push(
@@ -281,22 +280,22 @@ class HomeScreen extends StatelessWidget {
                       CarteSituation(
                         titre: 'Veaux mâles',
                         valeur: provider.situation.veauxMales,
-                        icon: Icons.male_outlined,
-                        couleur: Colors.blue.shade600,
+                        icon: AppIcons.veauMale,
+                        couleur: AppColors.veauMale,
                         sousTitre: 'VM',
                       ),
                       CarteSituation(
                         titre: 'Veaux femelles',
                         valeur: provider.situation.veauxFemelles,
-                        icon: Icons.female_outlined,
-                        couleur: Colors.purple.shade400,
+                        icon: AppIcons.veauFemelle,
+                        couleur: AppColors.veauFemelle,
                         sousTitre: 'VF',
                       ),
                       CarteSituation(
                         titre: 'Total',
                         valeur: provider.situation.total,
-                        icon: Icons.pets,
-                        couleur: Colors.teal.shade700,
+                        icon: AppIcons.total,
+                        couleur: AppColors.total,
                         sousTitre: 'TOT',
                       ),
                     ],
@@ -308,6 +307,7 @@ class HomeScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: CarteGestation(
                     valeur: provider.situation.gestation,
+                    detail: _detailProchainTerme(provider),
                   ),
                 ),
               ),
@@ -323,7 +323,7 @@ class HomeScreen extends StatelessWidget {
                           _buildResumeItem(
                             'Veaux total',
                             provider.situation.veauxTotal,
-                            Icons.add_circle,
+                            const Icon(Icons.add_circle, color: Colors.grey),
                           ),
                           Container(
                             height: 40,
@@ -333,7 +333,7 @@ class HomeScreen extends StatelessWidget {
                           _buildResumeItem(
                             'En gestation',
                             provider.situation.gestation,
-                            Icons.pregnant_woman,
+                            const GestationIcon(size: 24, color: AppColors.gestation),
                           ),
                         ],
                       ),
@@ -409,24 +409,11 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const SliverPadding(
-                padding: EdgeInsets.only(bottom: 100),
+                padding: EdgeInsets.only(bottom: 110),
               ),
             ],
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const MouvementScreen(),
-            ),
-          );
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Mouvement'),
-        backgroundColor: Colors.green.shade700,
       ),
     );
   }
@@ -434,14 +421,11 @@ class HomeScreen extends StatelessWidget {
   Widget _buildResumeItem(
     String label,
     int value,
-    IconData icon,
+    Widget icone,
   ) {
     return Column(
       children: [
-        Icon(
-          icon,
-          color: Colors.grey.shade600,
-        ),
+        icone,
         const SizedBox(height: 4),
         Text(
           '$value',
@@ -461,8 +445,26 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  /// Calcule la date de terme la plus proche parmi les vaches gestantes,
+  /// pour affichage sur la carte "En gestation" (calcul 100% automatique).
+  String? _detailProchainTerme(TroupeauProvider provider) {
+    final termes = provider.lots
+        .where((l) => l.categorie == CategorieAnimal.vache && l.enGestation)
+        .map((l) => l.dateTermeGestation)
+        .whereType<DateTime>()
+        .toList()
+      ..sort();
+    if (termes.isEmpty) return null;
+    final prochain = termes.first;
+    final jours = prochain.difference(DateTime.now()).inDays;
+    if (jours < 0) return 'Terme dépassé de ${-jours} j – vérifier la gestation';
+    if (jours == 0) return 'Terme prévu aujourd\'hui';
+    return 'Prochain terme dans $jours j (${DateFormat('dd/MM/yyyy').format(prochain)})';
+  }
+
   void _showAjouterProprietaire(BuildContext context) {
     final ctrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
 
     showDialog(
       context: context,
@@ -472,10 +474,15 @@ class HomeScreen extends StatelessWidget {
             'Nouveau propriétaire',
             style: GoogleFonts.poppins(),
           ),
-          content: TextField(
-            controller: ctrl,
-            decoration: const InputDecoration(
-              labelText: 'Nom',
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Nom *',
+              ),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Le nom est obligatoire' : null,
             ),
           ),
           actions: [
@@ -485,10 +492,10 @@ class HomeScreen extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () {
-                if (ctrl.text.isNotEmpty) {
+                if (formKey.currentState?.validate() ?? false) {
                   context
                       .read<TroupeauProvider>()
-                      .ajouterProprietaire(ctrl.text);
+                      .ajouterProprietaire(ctrl.text.trim());
                   Navigator.pop(ctx);
                 }
               },
@@ -503,6 +510,7 @@ class HomeScreen extends StatelessWidget {
     void _showAjouterTroupeau(BuildContext context) {
     final nomCtrl = TextEditingController();
     final codeCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
 
     showDialog(
       context: context,
@@ -512,22 +520,27 @@ class HomeScreen extends StatelessWidget {
             'Nouveau troupeau',
             style: GoogleFonts.poppins(),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nomCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Nom',
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nomCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Nom *',
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Le nom est obligatoire' : null,
                 ),
-              ),
-              TextField(
-                controller: codeCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Code (ex : AH)',
+                TextFormField(
+                  controller: codeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Code (ex : AH)',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -538,10 +551,10 @@ class HomeScreen extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () {
-                if (nomCtrl.text.trim().isNotEmpty) {
+                if (formKey.currentState?.validate() ?? false) {
                   context.read<TroupeauProvider>().ajouterTroupeau(
                         nomCtrl.text.trim(),
-                        code: codeCtrl.text.trim(),
+                        code: codeCtrl.text.trim().isEmpty ? null : codeCtrl.text.trim(),
                       );
 
                   Navigator.pop(ctx);

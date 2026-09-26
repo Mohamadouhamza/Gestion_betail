@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../models/enums.dart';
+import '../services/fiche_ledger_service.dart';
 
 class TroupeauProvider extends ChangeNotifier {
   final DatabaseHelper _db = DatabaseHelper.instance;
@@ -15,6 +17,7 @@ class TroupeauProvider extends ChangeNotifier {
   List<LotAnimal> _lots = [];
   FiltreAge _filtreAgeTaurions = FiltreAge.tous;
   bool _isLoading = false;
+  Timer? _timerGestation;
 
   List<Proprietaire> get proprietaires => _proprietaires;
   List<Troupeau> get troupeaux => _troupeaux;
@@ -32,8 +35,23 @@ class TroupeauProvider extends ChangeNotifier {
     _troupeaux = await _db.getTroupeaux();
     if (_proprietaires.isNotEmpty) _proprietaireSelectionne = _proprietaires.first;
     if (_troupeaux.isNotEmpty) _troupeauSelectionne = _troupeaux.first;
+    await _db.cloturerGestationsTerminees();
     await rafraichirDonnees();
     _setLoading(false);
+
+    // Vérifie automatiquement les gestations arrivées à terme toutes les heures
+    // tant que l'application reste ouverte (en plus de la vérification à chaque action).
+    _timerGestation?.cancel();
+    _timerGestation = Timer.periodic(const Duration(hours: 1), (_) async {
+      final nb = await _db.cloturerGestationsTerminees();
+      if (nb > 0) await rafraichirDonnees();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timerGestation?.cancel();
+    super.dispose();
   }
 
   Future<void> selectionnerProprietaire(Proprietaire p) async {
@@ -51,6 +69,7 @@ class TroupeauProvider extends ChangeNotifier {
   Future<void> rafraichirDonnees() async {
     if (_troupeauSelectionne == null) return;
     _setLoading(true);
+    await _db.cloturerGestationsTerminees();
     _situation = await _db.getSituation(
       troupeauId: _troupeauSelectionne!.id,
       proprietaireId: _proprietaireSelectionne?.id,
@@ -62,6 +81,22 @@ class TroupeauProvider extends ChangeNotifier {
     );
     await chargerLots();
     _setLoading(false);
+  }
+
+  /// Reconstruit la fiche de suivi complète (grand-livre), avec les colonnes
+  /// exactes de la fiche papier : PERTES / VENTE / ACHAT / NAIS / BILA / SITUATION / PROJECTIONS.
+  Future<List<FicheLigne>> genererFicheLedger() async {
+    if (_troupeauSelectionne == null) return [];
+    final tousMouvements = await _db.getTousMouvementsPourFiche(troupeauId: _troupeauSelectionne!.id);
+    final proprietairesDuTroupeau = _proprietaires
+        .where((p) => tousMouvements.any((m) => m.proprietaireId == p.id))
+        .toList();
+    final lotsActuels = await _db.getLots(troupeauId: _troupeauSelectionne!.id);
+    return FicheLedgerService.construire(
+      mouvements: tousMouvements,
+      proprietaires: proprietairesDuTroupeau,
+      lotsActuels: lotsActuels,
+    );
   }
 
   Future<void> chargerLots() async {

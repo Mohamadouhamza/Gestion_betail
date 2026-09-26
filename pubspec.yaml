@@ -28,6 +28,8 @@ dependencies:
   # Export
   pdf: ^3.10.0
   excel: ^4.0.6
+  open_file: ^3.3.2
+  share_plus: ^7.2.1
 
 dev_dependencies:
   flutter_test:
