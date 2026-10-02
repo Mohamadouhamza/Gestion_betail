@@ -8,7 +8,6 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:excel/excel.dart' as xls;
 import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
 import 'package:share_plus/share_plus.dart';
 import '../providers/troupeau_provider.dart';
 import '../models/models.dart';
@@ -412,8 +411,13 @@ class _FicheScreenState extends State<FicheScreen> {
   }
 
   // ---------------------------------------------------------------
-  // SAUVEGARDE + OUVERTURE RÉELLE DU FICHIER (+ partage en secours)
+  // SAUVEGARDE + PARTAGE RÉEL DU FICHIER
   // ---------------------------------------------------------------
+  // Note : on utilise uniquement `share_plus` (pas `open_file`, qui embarque
+  // une vieille version de kotlin-stdlib-jdk7/jdk8 provoquant un conflit de
+  // classes dupliquées au build Android : "Duplicate class kotlin.collections
+  // .jdk8..."). Le partage natif Android propose déjà "Ouvrir avec..." dans la
+  // liste des applications, donc on ne perd aucune fonctionnalité.
   Future<void> _sauvegarderEtOuvrir(BuildContext context, Uint8List bytes, String extension, String prefixe) async {
     final provider = context.read<TroupeauProvider>();
     final nomTroupeau = (provider.troupeauSelectionne?.nom ?? 'betail').replaceAll(RegExp(r'\s+'), '_');
@@ -426,27 +430,16 @@ class _FicheScreenState extends State<FicheScreen> {
 
     if (!context.mounted) return;
 
-    OpenResult? resultat;
-    try {
-      resultat = await OpenFile.open(file.path);
-    } catch (_) {
-      resultat = null;
-    }
+    // Ouvre directement le sélecteur natif (Ouvrir avec / Enregistrer / Envoyer).
+    await Share.shareXFiles([XFile(file.path)], text: filename);
 
     if (!context.mounted) return;
-
-    final ouvertureReussie = resultat != null && resultat.type == ResultType.done;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          ouvertureReussie
-              ? '$filename généré et ouvert'
-              : '$filename généré. Appuie sur PARTAGER pour l\'enregistrer ou l\'ouvrir.',
-        ),
-        duration: const Duration(seconds: 6),
+        content: Text('$filename enregistré.'),
+        duration: const Duration(seconds: 4),
         action: SnackBarAction(
-          label: 'PARTAGER',
+          label: 'REPARTAGER',
           onPressed: () => Share.shareXFiles([XFile(file.path)], text: filename),
         ),
       ),
