@@ -1,13 +1,12 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.example.gestion_betail"
-    compileSdk = 34 // <-- correction pour path_provider_android
+    compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -20,10 +19,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.gestion_betail"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -32,8 +28,6 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -43,11 +37,23 @@ android {
     }
 }
 
-// Force une seule version de Kotlin pour éviter les classes dupliquées
-// IMPORTANT: Placer APRÈS le bloc android {}
+// ✅ SOLUTION COMPLÈTE : Force + Exclut les vieilles versions
 configurations.all {
     resolutionStrategy {
+        // Force la version 1.8.10
         force("org.jetbrains.kotlin:kotlin-stdlib:1.8.10")
+        
+        // Exclure les vieilles versions pour qu'elles ne soient jamais incluses
+        eachDependency { details ->
+            if (details.requested.group == "org.jetbrains.kotlin") {
+                if (details.requested.name in listOf(
+                    "kotlin-stdlib-jdk7",
+                    "kotlin-stdlib-jdk8"
+                )) {
+                    details.exclude()
+                }
+            }
+        }
     }
 }
 
