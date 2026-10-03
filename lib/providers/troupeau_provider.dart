@@ -87,7 +87,9 @@ class TroupeauProvider extends ChangeNotifier {
   /// exactes de la fiche papier : PERTES / VENTE / ACHAT / NAIS / BILA / SITUATION / PROJECTIONS.
   Future<List<FicheLigne>> genererFicheLedger() async {
     if (_troupeauSelectionne == null) return [];
-    final tousMouvements = await _db.getTousMouvementsPourFiche(troupeauId: _troupeauSelectionne!.id);
+    final tousMouvements = await _db.getTousMouvementsPourFiche(
+  troupeauId: _troupeauSelectionne?.id ?? 0  // Utilise 0 si null
+);
     final proprietairesDuTroupeau = _proprietaires
         .where((p) => tousMouvements.any((m) => m.proprietaireId == p.id))
         .toList();
