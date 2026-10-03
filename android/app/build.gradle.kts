@@ -5,9 +5,18 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Force une seule version de Kotlin pour éviter les classes dupliquées
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-stdlib:1.8.10")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.10")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.10")
+    }
+}
+
 android {
     namespace = "com.example.gestion_betail"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 34 // <-- correction pour path_provider_android
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
