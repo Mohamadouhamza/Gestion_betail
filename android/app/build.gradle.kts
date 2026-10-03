@@ -5,15 +5,6 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Force une seule version de Kotlin pour éviter les classes dupliquées
-configurations.all {
-    resolutionStrategy {
-        force("org.jetbrains.kotlin:kotlin-stdlib:1.8.10")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.10")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.10")
-    }
-}
-
 android {
     namespace = "com.example.gestion_betail"
     compileSdk = 34 // <-- correction pour path_provider_android
@@ -45,6 +36,18 @@ android {
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
+    }
+
+    packagingOptions {
+        exclude("META-INF/proguard/androidx-*.pro")
+    }
+}
+
+// Force une seule version de Kotlin pour éviter les classes dupliquées
+// IMPORTANT: Placer APRÈS le bloc android {}
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-stdlib:1.8.10")
     }
 }
 
