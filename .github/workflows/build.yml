@@ -13,7 +13,7 @@ jobs:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
 
-      - name: Installer Java 17
+      - name: Installer Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -23,8 +23,13 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.13.0"
-          channel: "stable"
           cache: true
+
+      - name: Vérifier la structure du projet
+        run: |
+          pwd
+          ls -la
+          find android -maxdepth 5 -name "AndroidManifest.xml" -print
 
       - name: Nettoyer le projet
         run: flutter clean
