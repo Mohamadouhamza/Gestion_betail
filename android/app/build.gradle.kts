@@ -37,7 +37,14 @@ android {
     }
 }
 
-// ✅ FIX KOTLIN DUPLICATES - Force + Exclut
+dependencies {
+    // Exclude old Kotlin versions from all dependencies
+    all {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
+    }
+}
+
 configurations.all {
     resolutionStrategy {
         force("org.jetbrains.kotlin:kotlin-stdlib:1.8.10")
