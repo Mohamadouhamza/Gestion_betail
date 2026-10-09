@@ -25,14 +25,18 @@ jobs:
           flutter-version: "3.13.0"
           cache: true
 
-      - name: Vérifier la structure du projet
+      - name: Nettoyer complètement le projet
         run: |
-          pwd
-          ls -la
-          find android -maxdepth 5 -name "AndroidManifest.xml" -print
+          flutter clean
+          rm -rf build
+          rm -rf android/.gradle
+          rm -rf android/app/build
+          rm -rf ~/.gradle
 
-      - name: Nettoyer le projet
-        run: flutter clean
+      - name: Supprimer et régénérer Android
+        run: |
+          rm -rf android
+          flutter create --platforms=android . --project-name gestion_betail
 
       - name: Installer les dépendances
         run: flutter pub get
