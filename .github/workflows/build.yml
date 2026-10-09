@@ -34,6 +34,11 @@ jobs:
       - name: Nettoyer le projet
         run: flutter clean
 
+      - name: Nettoyer et régénérer Android
+        run: |
+        rm -rf android
+        flutter create --platforms=android . --project-name gestion_betail
+
       - name: Installer les dépendances
         run: flutter pub get
 
