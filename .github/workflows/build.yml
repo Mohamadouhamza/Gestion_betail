@@ -32,8 +32,9 @@ jobs:
           rm -rf ~/.gradle
           rm -rf android/.gradle
           rm -rf android/app/build
-          rm -rf $PUB_CACHE/hosted/pub.dev/sqflite*
-          rm -rf $PUB_CACHE/hosted/pub.dev/kotlin*
+
+      - name: Configurer Gradle init
+        run: mkdir -p ~/.gradle && cp .gradle/init.gradle ~/.gradle/init.gradle
 
       - name: Supprimer et régénérer Android
         run: |
