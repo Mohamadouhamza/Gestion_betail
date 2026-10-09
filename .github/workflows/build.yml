@@ -13,7 +13,7 @@ jobs:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
 
-      - name: Installer Java
+      - name: Installer Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
