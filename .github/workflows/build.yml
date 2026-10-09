@@ -23,15 +23,15 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.13.0"
-          cache: true
+          cache: false
 
-      - name: Nettoyer complètement le projet
+      - name: Nettoyer complètement
         run: |
           flutter clean
           rm -rf build
+          rm -rf ~/.gradle
           rm -rf android/.gradle
           rm -rf android/app/build
-          rm -rf ~/.gradle
 
       - name: Supprimer et régénérer Android
         run: |
