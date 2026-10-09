@@ -1,0 +1,16 @@
+allprojects {
+    configurations.all {
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.8.10'
+            
+            dependencySubstitution {
+                substitute module('org.jetbrains.kotlin:kotlin-stdlib-jdk7') with module('org.jetbrains.kotlin:kotlin-stdlib:1.8.10')
+                substitute module('org.jetbrains.kotlin:kotlin-stdlib-jdk8') with module('org.jetbrains.kotlin:kotlin-stdlib:1.8.10')
+            }
+        }
+        
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+    }
+}
