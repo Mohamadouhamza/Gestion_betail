@@ -11,6 +11,14 @@ buildscript {
     }
 }
 
+// ✅ Force Kotlin partout
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-stdlib:1.8.10")
+        force("org.jetbrains.kotlin:kotlin-stdlib-common:1.8.10")
+    }
+}
+
 allprojects {
     repositories {
         google()
