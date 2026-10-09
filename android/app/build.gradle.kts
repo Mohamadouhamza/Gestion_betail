@@ -37,7 +37,7 @@ android {
     }
 }
 
-// ✅ FIX KOTLIN DUPLICATES
+// ✅ FIX KOTLIN DUPLICATES - Force + Exclut
 configurations.all {
     resolutionStrategy {
         force("org.jetbrains.kotlin:kotlin-stdlib:1.8.10")
@@ -53,6 +53,9 @@ configurations.all {
             }
         }
     }
+    
+    exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
+    exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
 }
 
 flutter {
