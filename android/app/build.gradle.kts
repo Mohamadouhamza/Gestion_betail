@@ -1,57 +1,60 @@
-name: Build APK
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    id("dev.flutter.flutter-gradle-plugin")
+}
 
-on:
-  push:
-  pull_request:
-  workflow_dispatch:
+android {
+    namespace = "com.example.gestion_betail"
+    compileSdk = 34
+    ndkVersion = flutter.ndkVersion
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 
-    steps:
-      - name: Récupérer le dépôt
-        uses: actions/checkout@v4
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.toString()
+    }
 
-      - name: Installer Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
+    defaultConfig {
+        applicationId = "com.example.gestion_betail"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
 
-      - name: Installer Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.13.0"
-          channel: "stable"
-          cache: true
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
 
-      - name: Nettoyer le projet
-        run: flutter clean
+    packagingOptions {
+        exclude("META-INF/proguard/androidx-*.pro")
+    }
+}
 
-      - name: Installer les dépendances
-        run: flutter pub get
+// ✅ FIX KOTLIN DUPLICATES
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-stdlib:1.8.10")
+        force("org.jetbrains.kotlin:kotlin-stdlib-common:1.8.10")
+        
+        eachDependency { details ->
+            if (details.requested.group == "org.jetbrains.kotlin") {
+                when (details.requested.name) {
+                    "kotlin-stdlib-jdk7", "kotlin-stdlib-jdk8" -> {
+                        details.useTarget("org.jetbrains.kotlin:kotlin-stdlib:1.8.10")
+                    }
+                }
+            }
+        }
+    }
+}
 
-      - name: Vérifier la structure du projet
-        run: |
-          pwd
-          ls -la
-          find android -maxdepth 5 -name "AndroidManifest.xml" -print
-
-      - name: Construire l'APK debug
-        run: flutter build apk --debug
-
-      - name: Construire l'APK release
-        run: flutter build apk --release
-
-      - name: Publier l'APK debug
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
-
-      - name: Publier l'APK release
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+flutter {
+    source = "../.."
+}
