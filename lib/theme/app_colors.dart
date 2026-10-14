@@ -33,6 +33,8 @@ class AppIcons {
   static const IconData historique = Icons.history;
   static const IconData fiche = Icons.description;
   static const IconData ficheInactif = Icons.description_outlined;
+  static const IconData proprietaire = Icons.people;
+  static const IconData proprietaireInactif = Icons.people_outline;
 
   static const IconData taurion = Icons.male;
   static const IconData genisse = Icons.female;

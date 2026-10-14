@@ -18,17 +18,22 @@ class _MouvementScreenState extends State<MouvementScreen> {
 
   TypeMouvement _type = TypeMouvement.achat;
   CategorieAnimal _categorie = CategorieAnimal.vache;
+  Proprietaire? _proprietaireChoisi;
   final _quantiteCtrl = TextEditingController(text: '1');
   final _prixCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   DateTime _date = DateTime.now();
-  bool _nouveauLot = true;
   DateTime _dateNaissance = DateTime.now();
   bool _enGestation = false;
   bool _enregistrementEnCours = false;
 
+  int? _gestationsDisponibles;
+  int? _gestationsChargeesPour;
+
+  // "Report" n'est volontairement PAS proposé ici : ce n'est pas un
+  // mouvement (achat/vente/perte/naissance) mais le solde d'ouverture d'un
+  // propriétaire ou d'un troupeau, renseigné automatiquement à sa création.
   final List<TypeMouvement> _typesDisponibles = [
-    TypeMouvement.report,
     TypeMouvement.achat,
     TypeMouvement.vente,
     TypeMouvement.perte,
@@ -45,6 +50,36 @@ class _MouvementScreenState extends State<MouvementScreen> {
     return CategorieAnimal.values;
   }
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<TroupeauProvider>();
+      setState(() => _proprietaireChoisi = provider.proprietaireSelectionne);
+      _rafraichirGestationsDisponibles();
+    });
+  }
+
+  Future<void> _rafraichirGestationsDisponibles() async {
+    if (_proprietaireChoisi?.id == null) {
+      setState(() {
+        _gestationsDisponibles = null;
+        _gestationsChargeesPour = null;
+      });
+      return;
+    }
+    final provider = context.read<TroupeauProvider>();
+    final id = _proprietaireChoisi!.id!;
+    final nb = await provider.getNombreGestationsPourProprietaire(id);
+    if (!mounted) return;
+    setState(() {
+      _gestationsDisponibles = nb;
+      _gestationsChargeesPour = id;
+    });
+    // Revalide le champ quantité si la naissance est déjà sélectionnée.
+    _formKey.currentState?.validate();
+  }
+
   void _changerType(TypeMouvement type) {
     setState(() {
       _type = type;
@@ -52,6 +87,12 @@ class _MouvementScreenState extends State<MouvementScreen> {
         _categorie = _categoriesDisponibles.first;
       }
     });
+    if (type == TypeMouvement.naissance) _rafraichirGestationsDisponibles();
+  }
+
+  void _changerProprietaire(Proprietaire p) {
+    setState(() => _proprietaireChoisi = p);
+    _rafraichirGestationsDisponibles();
   }
 
   @override
@@ -82,13 +123,44 @@ class _MouvementScreenState extends State<MouvementScreen> {
             children: [
               Card(
                 color: Colors.green.shade50,
-                child: ListTile(
-                  leading: const Icon(Icons.info, color: AppColors.vertPrincipal),
-                  title: Text(
-                    '${provider.proprietaireSelectionne?.nom ?? '-'} – ${provider.troupeauSelectionne?.nom ?? '-'}',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.groups, color: AppColors.vertPrincipal, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Troupeau : ${provider.troupeauSelectionne?.nom ?? '-'}',
+                              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<Proprietaire>(
+                        value: provider.proprietaires.contains(_proprietaireChoisi) ? _proprietaireChoisi : null,
+                        decoration: InputDecoration(
+                          labelText: 'Propriétaire *',
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          prefixIcon: const Icon(Icons.person),
+                        ),
+                        items: provider.proprietaires
+                            .map((p) => DropdownMenuItem(value: p, child: Text(p.nom, style: GoogleFonts.poppins())))
+                            .toList(),
+                        onChanged: (p) {
+                          if (p != null) _changerProprietaire(p);
+                        },
+                        validator: (p) => p == null ? 'Sélectionnez un propriétaire' : null,
+                      ),
+                    ],
                   ),
-                  subtitle: const Text('Ce mouvement sera enregistré pour ce propriétaire et ce troupeau.'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -123,7 +195,7 @@ class _MouvementScreenState extends State<MouvementScreen> {
                         ))
                     .toList(),
               ),
-              if (_type == TypeMouvement.naissance)
+              if (_type == TypeMouvement.naissance) ...[
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
@@ -131,6 +203,16 @@ class _MouvementScreenState extends State<MouvementScreen> {
                     style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _proprietaireChoisi == null
+                        ? 'Sélectionnez un propriétaire pour voir ses vaches en gestation.'
+                        : 'Vaches en gestation chez ${_proprietaireChoisi!.nom} : ${_gestationsDisponibles ?? '…'}',
+                    style: GoogleFonts.poppins(fontSize: 12, color: AppColors.gestation, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               TextFormField(
                 controller: _quantiteCtrl,
@@ -150,6 +232,13 @@ class _MouvementScreenState extends State<MouvementScreen> {
                     final dispo = provider.situation.getByCategorie(_categorie);
                     if (n > dispo) {
                       return 'Stock insuffisant : $dispo ${_categorie.code} disponible(s)';
+                    }
+                  }
+                  if (_type == TypeMouvement.naissance) {
+                    if (_proprietaireChoisi == null) return 'Sélectionnez d\'abord un propriétaire';
+                    final gestDispo = (_gestationsChargeesPour == _proprietaireChoisi?.id) ? (_gestationsDisponibles ?? 0) : 0;
+                    if (n > gestDispo) {
+                      return 'Impossible : seulement $gestDispo vache(s) en gestation chez ${_proprietaireChoisi!.nom}';
                     }
                   }
                   return null;
@@ -193,30 +282,25 @@ class _MouvementScreenState extends State<MouvementScreen> {
               ),
               const SizedBox(height: 16),
               if (_type.sens == 'entree') ...[
-                CheckboxListTile(
-                  title: Text('Créer un nouveau lot', style: GoogleFonts.poppins()),
-                  value: _nouveauLot,
-                  onChanged: (v) => setState(() => _nouveauLot = v!),
+                ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade300)),
+                  tileColor: Colors.grey.shade100,
+                  leading: const Icon(Icons.cake),
+                  title: const Text('Date de naissance du lot'),
+                  subtitle: Text(DateFormat('dd/MM/yyyy').format(_dateNaissance), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _dateNaissance,
+                      firstDate: DateTime(2015),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) setState(() => _dateNaissance = picked);
+                  },
                 ),
-                if (_nouveauLot)
-                  ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade300)),
-                    tileColor: Colors.grey.shade100,
-                    leading: const Icon(Icons.cake),
-                    title: const Text('Date de naissance du lot'),
-                    subtitle: Text(DateFormat('dd/MM/yyyy').format(_dateNaissance), style: const TextStyle(fontWeight: FontWeight.w600)),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _dateNaissance,
-                        firstDate: DateTime(2015),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null) setState(() => _dateNaissance = picked);
-                    },
-                  ),
                 if (_categorie == CategorieAnimal.vache) ...[
+                  const SizedBox(height: 8),
                   CheckboxListTile(
                     title: Text('Vache en gestation ?', style: GoogleFonts.poppins()),
                     subtitle: const Text('Le terme (≈ 9 mois) sera calculé et clôturé automatiquement.'),
@@ -262,7 +346,7 @@ class _MouvementScreenState extends State<MouvementScreen> {
   Future<void> _enregistrer() async {
     final provider = context.read<TroupeauProvider>();
 
-    if (provider.troupeauSelectionne == null || provider.proprietaireSelectionne == null) {
+    if (provider.troupeauSelectionne == null || _proprietaireChoisi == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sélectionnez un propriétaire et un troupeau avant d\'enregistrer.')),
       );
@@ -281,10 +365,11 @@ class _MouvementScreenState extends State<MouvementScreen> {
 
     final quantite = int.parse(_quantiteCtrl.text.trim());
     final prixTexte = _prixCtrl.text.trim().replaceAll(',', '.');
+    final gestationActive = _categorie == CategorieAnimal.vache && _type.sens == 'entree' && _enGestation;
 
     final mouvement = Mouvement(
       troupeauId: provider.troupeauSelectionne!.id!,
-      proprietaireId: provider.proprietaireSelectionne!.id!,
+      proprietaireId: _proprietaireChoisi!.id!,
       type: _type,
       categorie: _categorie,
       quantite: quantite,
@@ -293,21 +378,13 @@ class _MouvementScreenState extends State<MouvementScreen> {
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
     );
 
-    LotAnimal? lot;
-    if (_type.sens == 'entree' && _nouveauLot) {
-      lot = LotAnimal(
-        troupeauId: provider.troupeauSelectionne!.id!,
-        proprietaireId: provider.proprietaireSelectionne!.id!,
-        categorie: _categorie,
-        quantite: quantite,
-        dateNaissance: _dateNaissance,
-        enGestation: _categorie == CategorieAnimal.vache && _enGestation,
-        dateGestation: _enGestation ? _date : null,
-      );
-    }
-
     try {
-      await provider.ajouterMouvement(mouvement, nouveauLot: lot);
+      await provider.ajouterMouvement(
+        mouvement,
+        dateNaissanceLot: _dateNaissance,
+        enGestation: gestationActive,
+        dateGestation: gestationActive ? _date : null,
+      );
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mouvement enregistré')));

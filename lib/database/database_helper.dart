@@ -270,6 +270,17 @@ class DatabaseHelper {
     return maps.map((e) => Mouvement.fromMap(e)).toList();
   }
 
+  /// Identifiants des propriétaires ayant au moins un lot (quantité > 0)
+  /// dans ce troupeau. Utilisé pour la scission d'un troupeau existant.
+  Future<List<int>> getProprietaireIdsAvecStock(int troupeauId) async {
+    final db = await database;
+    final maps = await db.rawQuery(
+      'SELECT DISTINCT proprietaireId FROM lots WHERE troupeauId = ? AND quantite > 0',
+      [troupeauId],
+    );
+    return maps.map((e) => e['proprietaireId'] as int).toList();
+  }
+
   Future<Situation> getSituation({int? troupeauId, int? proprietaireId}) async {
     final db = await database;
     final conditions = <String>[];

@@ -1,5 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.gestion_betail">
+    <!-- Nécessaire uniquement sur Android 9 et moins (API <= 28) pour écrire
+         directement dans le dossier public Téléchargements : à partir
+         d'Android 10, MediaStore.Downloads est utilisé sans permission
+         (voir MainActivity.kt). -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
     <application
         android:label="gestion_betail"
         android:name="${applicationName}"

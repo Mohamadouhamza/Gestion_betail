@@ -11,6 +11,8 @@ import '../widgets/carte_situation.dart';
 import 'fiche_screen.dart';
 import 'historique_screen.dart';
 import 'inventaire_screen.dart';
+import 'nouveau_troupeau_screen.dart';
+import 'scinder_troupeau_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -29,28 +31,22 @@ class HomeScreen extends StatelessWidget {
 
           return CustomScrollView(
             slivers: [
+              // En-tête FIXE : pas de expandedHeight / flexibleSpace / floating,
+              // donc il ne rétrécit plus jamais pendant le défilement (hauteur
+              // de toolbar standard, toujours la même).
               SliverAppBar(
-                expandedHeight: 120,
-                floating: true,
                 pinned: true,
-                // Fond vert PLEIN (pas de dégradé) directement sur la SliverAppBar :
-                // c'est cette couleur qui reste visible une fois l'en-tête réduit.
-                // Avant, seul le "background" du FlexibleSpaceBar était coloré ;
-                // il s'estompe pendant le scroll et laissait apparaître le blanc
-                // par défaut du thème, rendant le titre blanc illisible.
+                floating: false,
+                automaticallyImplyLeading: false,
                 backgroundColor: AppColors.vertPrincipal,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                flexibleSpace: FlexibleSpaceBar(
-                  titlePadding: const EdgeInsetsDirectional.only(start: 16, bottom: 14),
-                  title: Text(
-                    'Fiche du bétail',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
+                title: Text(
+                  'Fiche du bétail',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
                   ),
-                  background: Container(color: AppColors.vertPrincipal),
                 ),
                 actions: [
                   IconButton(
@@ -82,112 +78,56 @@ class HomeScreen extends StatelessWidget {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.grey.shade300,
-                          ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.groups,
+                          color: AppColors.vertPrincipal,
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.person,
-                              color: AppColors.vertPrincipal,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<Proprietaire>(
-                                  isExpanded: true,
-                                  value: provider.proprietaireSelectionne,
-                                  items: provider.proprietaires
-                                      .map<DropdownMenuItem<Proprietaire>>(
-                                    (Proprietaire proprietaire) {
-                                      return DropdownMenuItem<Proprietaire>(
-                                        value: proprietaire,
-                                        child: Text(
-                                          proprietaire.nom,
-                                          style: GoogleFonts.poppins(),
-                                        ),
-                                      );
-                                    },
-                                  ).toList(),
-                                  onChanged: (Proprietaire? proprietaire) {
-                                    if (proprietaire != null) {
-                                      provider.selectionnerProprietaire(
-                                        proprietaire,
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle_outline),
-                              onPressed: () {
-                                _showAjouterProprietaire(context);
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<Troupeau>(
+                              isExpanded: true,
+                              value: provider.troupeauSelectionne,
+                              items: provider.troupeaux
+                                  .map<DropdownMenuItem<Troupeau>>(
+                                (Troupeau troupeau) {
+                                  return DropdownMenuItem<Troupeau>(
+                                    value: troupeau,
+                                    child: Text(
+                                      '${troupeau.nom} ${troupeau.code != null ? "(${troupeau.code})" : ""}',
+                                      style: GoogleFonts.poppins(),
+                                    ),
+                                  );
+                                },
+                              ).toList(),
+                              onChanged: (Troupeau? troupeau) {
+                                if (troupeau != null) {
+                                  provider.selectionnerTroupeau(troupeau);
+                                }
                               },
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.grey.shade300,
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.groups,
-                              color: AppColors.vertPrincipal,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<Troupeau>(
-                                  isExpanded: true,
-                                  value: provider.troupeauSelectionne,
-                                  items: provider.troupeaux
-                                      .map<DropdownMenuItem<Troupeau>>(
-                                    (Troupeau troupeau) {
-                                      return DropdownMenuItem<Troupeau>(
-                                        value: troupeau,
-                                        child: Text(
-                                          '${troupeau.nom} ${troupeau.code != null ? "(${troupeau.code})" : ""}',
-                                          style: GoogleFonts.poppins(),
-                                        ),
-                                      );
-                                    },
-                                  ).toList(),
-                                  onChanged: (Troupeau? troupeau) {
-                                    if (troupeau != null) {
-                                      provider.selectionnerTroupeau(troupeau);
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle_outline),
-                              onPressed: () {
-                                _showAjouterTroupeau(context);
-                              },
-                            ),
-                          ],
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          tooltip: 'Nouveau troupeau',
+                          onPressed: () {
+                            _showOptionsTroupeau(context);
+                          },
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -198,18 +138,32 @@ class HomeScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Situation au ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+                        'Situation générale au ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: Colors.grey.shade700,
                         ),
                       ),
+                      // Retour visuel explicite pendant le rafraîchissement
+                      // (avant : aucun changement visible, l'utilisateur ne
+                      // savait pas si l'appui avait été pris en compte).
                       IconButton(
-                        icon: const Icon(Icons.refresh),
-                        onPressed: () {
-                          provider.rafraichirDonnees();
-                        },
+                        icon: provider.isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.4,
+                                  color: AppColors.vertPrincipal,
+                                ),
+                              )
+                            : const Icon(Icons.refresh),
+                        onPressed: provider.isLoading
+                            ? null
+                            : () {
+                                provider.rafraichirDonnees();
+                              },
                       ),
                     ],
                   ),
@@ -462,109 +416,43 @@ class HomeScreen extends StatelessWidget {
     return 'Prochain terme dans $jours j (${DateFormat('dd/MM/yyyy').format(prochain)})';
   }
 
-  void _showAjouterProprietaire(BuildContext context) {
-    final ctrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
+  /// Propose les deux façons de créer un troupeau :
+  /// - "Nouveau troupeau" : ajout net (ex. troupeau reçu), ne retire rien.
+  /// - "Scinder un troupeau existant" : prélève une partie d'un troupeau
+  ///   existant pour en créer un nouveau.
+  void _showOptionsTroupeau(BuildContext context) {
+    showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        return AlertDialog(
-          title: Text(
-            'Nouveau propriétaire',
-            style: GoogleFonts.poppins(),
-          ),
-          content: Form(
-            key: formKey,
-            child: TextFormField(
-              controller: ctrl,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Nom *',
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline, color: AppColors.vertPrincipal),
+                title: Text('Nouveau troupeau', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Ajoute un troupeau avec son propre cheptel.'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const NouveauTroupeauScreen()));
+                },
               ),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Le nom est obligatoire' : null,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  context
-                      .read<TroupeauProvider>()
-                      .ajouterProprietaire(ctrl.text.trim());
+              ListTile(
+                leading: const Icon(Icons.call_split, color: Colors.deepOrange),
+                title: Text('Scinder un troupeau existant', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Prélève une partie du cheptel d\'un troupeau existant.'),
+                onTap: () {
                   Navigator.pop(ctx);
-                }
-              },
-              child: const Text('Ajouter'),
-            ),
-          ],
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ScinderTroupeauScreen()));
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         );
       },
     );
   }
-
-    void _showAjouterTroupeau(BuildContext context) {
-    final nomCtrl = TextEditingController();
-    final codeCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text(
-            'Nouveau troupeau',
-            style: GoogleFonts.poppins(),
-          ),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nomCtrl,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Nom *',
-                  ),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Le nom est obligatoire' : null,
-                ),
-                TextFormField(
-                  controller: codeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Code (ex : AH)',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-              },
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  context.read<TroupeauProvider>().ajouterTroupeau(
-                        nomCtrl.text.trim(),
-                        code: codeCtrl.text.trim().isEmpty ? null : codeCtrl.text.trim(),
-                      );
-
-                  Navigator.pop(ctx);
-                }
-              },
-              child: const Text('Ajouter'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-} 
+}

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../screens/home_screen.dart';
 import '../screens/mouvement_screen.dart';
 import '../screens/inventaire_screen.dart';
-import '../screens/historique_screen.dart';
+import '../screens/proprietaires_screen.dart';
 import '../screens/fiche_screen.dart';
 import '../theme/app_colors.dart';
 
@@ -27,7 +27,7 @@ class _BottomNavScaffoldState extends State<BottomNavScaffold> {
     HomeScreen(),
     SizedBox(),
     InventaireScreen(),
-    HistoriqueScreen(),
+    ProprietairesScreen(),
     FicheScreen(),
   ];
 
@@ -35,7 +35,7 @@ class _BottomNavScaffoldState extends State<BottomNavScaffold> {
     _NavSpec(AppIcons.accueilInactif, AppIcons.accueil, 'Accueil'),
     _NavSpec(AppIcons.mouvement, AppIcons.mouvement, 'Mouvement'),
     _NavSpec(AppIcons.inventaireInactif, AppIcons.inventaire, 'Inventaire'),
-    _NavSpec(AppIcons.historique, AppIcons.historique, 'Historique'),
+    _NavSpec(AppIcons.proprietaireInactif, AppIcons.proprietaire, 'Propriétaire'),
     _NavSpec(AppIcons.ficheInactif, AppIcons.fiche, 'Fiche'),
   ];
 

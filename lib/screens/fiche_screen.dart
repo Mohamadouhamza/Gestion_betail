@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -13,64 +14,120 @@ import '../providers/troupeau_provider.dart';
 import '../models/models.dart';
 import '../theme/app_colors.dart';
 
+/// Canal natif (Kotlin, voir MainActivity.kt) utilisé pour enregistrer
+/// directement un fichier dans le dossier public "Téléchargements" de
+/// l'appareil (visible immédiatement dans le gestionnaire de fichiers,
+/// sans passer par le sélecteur de partage).
+const MethodChannel _canalTelechargements = MethodChannel('gestion_betail/downloads');
+
 /// ============================================================
 /// STRUCTURE EXACTE DE LA FICHE PAPIER (source unique de vérité,
 /// utilisée pour l'écran, le PDF et l'Excel afin de garantir des
 /// colonnes rigoureusement identiques partout).
+///
+/// 3 niveaux d'en-tête, comme sur le papier :
+///  - [group]    : grand groupe ("PERTES", "VENTE", "ACHAT", "NAIS",
+///                 "SITUATION A DATE", "PROJECTIONS")
+///  - [subgroup] : sous-groupe à l'intérieur d'un groupe (seule la paire
+///                 VM/VF de "SITUATION A DATE" en a un : "VO", exactement
+///                 comme sur la fiche papier où VO coiffe VM et VF)
+///  - [label]    : libellé final de la colonne
 /// ============================================================
 class _ColSpec {
-  final String group; // '' si la colonne n'appartient à aucun groupe
+  final String group;
+  final String subgroup;
   final String label;
   final double width;
-  const _ColSpec(this.group, this.label, this.width);
+  const _ColSpec(this.group, this.subgroup, this.label, this.width);
 }
 
 const List<_ColSpec> _cols = [
-  _ColSpec('', 'DATE', 62),
-  _ColSpec('', 'PROPRIET.', 88),
-  _ColSpec('PERTES', 'T', 30),
-  _ColSpec('PERTES', 'G', 30),
-  _ColSpec('PERTES', 'V', 30),
-  _ColSpec('PERTES', 'VM', 32),
-  _ColSpec('PERTES', 'VF', 32),
-  _ColSpec('VENTE', 'T', 30),
-  _ColSpec('VENTE', 'G', 30),
-  _ColSpec('VENTE', 'V', 30),
-  _ColSpec('ACHAT', 'T', 30),
-  _ColSpec('ACHAT', 'G', 30),
-  _ColSpec('NAIS', 'M', 30),
-  _ColSpec('NAIS', 'F', 30),
-  _ColSpec('', 'BILA', 42),
-  _ColSpec('SITUATION A DATE', 'T', 32),
-  _ColSpec('SITUATION A DATE', 'G', 32),
-  _ColSpec('SITUATION A DATE', 'V', 32),
-  _ColSpec('SITUATION A DATE', 'VM', 34),
-  _ColSpec('SITUATION A DATE', 'VF', 34),
-  _ColSpec('SITUATION A DATE', 'TOT', 44),
-  _ColSpec('PROJECTIONS', 'GEST', 42),
-  _ColSpec('PROJECTIONS', 'DATE', 58),
-  _ColSpec('PROJECTIONS', 'NOM.', 42),
-  _ColSpec('', 'OBSERVATIONS', 170),
+  _ColSpec('', '', 'DATE', 60),
+  _ColSpec('', '', 'PROPRIET.', 82),
+  _ColSpec('PERTES', '', 'T', 28),
+  _ColSpec('PERTES', '', 'G', 28),
+  _ColSpec('PERTES', '', 'V', 28),
+  _ColSpec('PERTES', '', 'VM', 30),
+  _ColSpec('PERTES', '', 'VF', 30),
+  _ColSpec('VENTE', '', 'T', 28),
+  _ColSpec('VENTE', '', 'G', 28),
+  _ColSpec('VENTE', '', 'V', 28),
+  _ColSpec('ACHAT', '', 'T', 28),
+  _ColSpec('ACHAT', '', 'G', 28),
+  _ColSpec('NAIS', '', 'M', 28),
+  _ColSpec('NAIS', '', 'F', 28),
+  _ColSpec('', '', 'BILA', 40),
+  _ColSpec('SITUATION A DATE', '', 'T', 30),
+  _ColSpec('SITUATION A DATE', '', 'G', 30),
+  _ColSpec('SITUATION A DATE', '', 'V', 30),
+  _ColSpec('SITUATION A DATE', 'VO', 'VM', 30),
+  _ColSpec('SITUATION A DATE', 'VO', 'VF', 30),
+  _ColSpec('SITUATION A DATE', '', 'TOT', 40),
+  _ColSpec('PROJECTIONS', '', 'GEST', 40),
+  _ColSpec('PROJECTIONS', '', 'DATE', 54),
+  _ColSpec('PROJECTIONS', '', 'NOM.', 40),
+  _ColSpec('', '', 'OBSERVATIONS', 150),
 ];
 
-List<String> _headerGroupeLigne() {
-  final result = <String>[];
+/// Hauteur FIXE de chaque ligne du tableau (écran + PDF) : c'est l'absence
+/// de hauteur explicite qui faisait "respirer" le tableau selon le contenu
+/// (colonnes PROPRIET./OBSERVATIONS en particulier) sur certains appareils.
+const double _hauteurLigneEntete = 30;
+const double _hauteurLigneDonnee = 26;
+
+/// Tronque un texte pour qu'il tienne sur une seule ligne dans une cellule
+/// de largeur fixe, au lieu de forcer la ligne entière à grandir.
+String _tronquer(String texte, int maxCaracteres) {
+  if (texte.length <= maxCaracteres) return texte;
+  return '${texte.substring(0, maxCaracteres - 1)}…';
+}
+
+List<List<String>> _headerLignes() {
+  // Ligne 1 : groupe principal (fusion visuelle par répétition de '')
+  final l1 = <String>[];
   String? dernierGroupe;
   for (final c in _cols) {
     if (c.group.isEmpty) {
-      result.add(c.label);
+      l1.add(c.label);
       dernierGroupe = null;
     } else if (c.group != dernierGroupe) {
-      result.add(c.group);
+      l1.add(c.group);
       dernierGroupe = c.group;
     } else {
-      result.add('');
+      l1.add('');
     }
   }
-  return result;
+
+  // Ligne 2 : sous-groupe s'il existe (ex. "VO" pour VM/VF), sinon le
+  // libellé final directement (ex. "T", "G", "BILA"...).
+  final l2 = <String>[];
+  String? dernierSousGroupe;
+  for (final c in _cols) {
+    if (c.group.isEmpty) {
+      l2.add('');
+    } else if (c.subgroup.isNotEmpty) {
+      if (c.subgroup != dernierSousGroupe) {
+        l2.add(c.subgroup);
+        dernierSousGroupe = c.subgroup;
+      } else {
+        l2.add('');
+      }
+    } else {
+      l2.add(c.label);
+      dernierSousGroupe = null;
+    }
+  }
+
+  // Ligne 3 : libellé final uniquement pour les colonnes qui ont un
+  // sous-groupe (VM/VF sous VO) ; vide partout ailleurs.
+  final l3 = <String>[for (final c in _cols) (c.group.isNotEmpty && c.subgroup.isNotEmpty) ? c.label : ''];
+
+  return [l1, l2, l3];
 }
 
-List<String> _headerSousLigne() => _cols.map((c) => c.group.isEmpty ? '' : c.label).toList();
+/// true si cette fiche a besoin d'une 3e ligne d'en-tête (dès qu'un
+/// sous-groupe existe, ex. VO).
+bool get _aUnSousGroupe => _cols.any((c) => c.subgroup.isNotEmpty);
 
 String _moisAnneeCourt(DateTime d) {
   const mois = ['jan', 'fév', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
@@ -80,9 +137,10 @@ String _moisAnneeCourt(DateTime d) {
 
 List<String> _valeurs(FicheLigne l, {required bool afficherDate}) {
   String s(int v) => v == 0 ? '' : '$v';
+  final dateAffichee = !afficherDate ? '' : (l.estReport ? 'REPORT' : DateFormat('dd/MM/yy').format(l.date));
   return [
-    afficherDate ? DateFormat('dd/MM/yy').format(l.date) : '',
-    l.proprietaire,
+    dateAffichee,
+    _tronquer(l.proprietaire, 13),
     s(l.perteT), s(l.perteG), s(l.perteV), s(l.perteVM), s(l.perteVF),
     s(l.venteT), s(l.venteG), s(l.venteV),
     s(l.achatT), s(l.achatG),
@@ -92,7 +150,7 @@ List<String> _valeurs(FicheLigne l, {required bool afficherDate}) {
     l.gest == 0 ? '' : '${l.gest}',
     l.dateProjection != null ? _moisAnneeCourt(l.dateProjection!) : '',
     '${l.nom}',
-    l.observations,
+    _tronquer(l.observations, 36),
   ];
 }
 
@@ -206,8 +264,7 @@ class _FicheScreenState extends State<FicheScreen> {
   // TABLEAU (mêmes colonnes que le PDF/Excel : _cols / _valeurs)
   // ---------------------------------------------------------------
   Widget _buildTable(List<FicheLigne> lignes) {
-    final groupeLigne = _headerGroupeLigne();
-    final sousLigne = _headerSousLigne();
+    final entetes = _headerLignes();
 
     DateTime? dernierDateAffichee;
 
@@ -215,8 +272,9 @@ class _FicheScreenState extends State<FicheScreen> {
       decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400)),
       child: Column(
         children: [
-          _buildEnteteRow(groupeLigne, bg: const Color(0xFFE8D4C0), bold: true),
-          _buildEnteteRow(sousLigne, bg: const Color(0xFFF2E8DC), bold: true),
+          _buildEnteteRow(entetes[0], bg: const Color(0xFFE8D4C0), bold: true),
+          _buildEnteteRow(entetes[1], bg: const Color(0xFFEFE0CE), bold: true),
+          if (_aUnSousGroupe) _buildEnteteRow(entetes[2], bg: const Color(0xFFF2E8DC), bold: true),
           ...lignes.map((l) {
             final showDate = dernierDateAffichee != l.date;
             if (showDate) dernierDateAffichee = l.date;
@@ -234,14 +292,14 @@ class _FicheScreenState extends State<FicheScreen> {
       children: List.generate(_cols.length, (i) {
         return Container(
           width: _cols[i].width,
-          height: 34,
+          height: _hauteurLigneEntete,
           alignment: Alignment.center,
           decoration: BoxDecoration(color: bg, border: Border.all(color: Colors.grey.shade400, width: 0.5)),
           child: Text(
             valeurs[i],
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(fontSize: 10, fontWeight: bold ? FontWeight.bold : FontWeight.normal),
-            maxLines: 2,
+            style: GoogleFonts.poppins(fontSize: 9.5, fontWeight: bold ? FontWeight.bold : FontWeight.normal),
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         );
@@ -255,7 +313,7 @@ class _FicheScreenState extends State<FicheScreen> {
       children: List.generate(_cols.length, (i) {
         return Container(
           width: _cols[i].width,
-          height: 32,
+          height: _hauteurLigneDonnee,
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
@@ -265,7 +323,7 @@ class _FicheScreenState extends State<FicheScreen> {
           child: Text(
             valeurs[i],
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(fontSize: 10, fontWeight: estTotal ? FontWeight.bold : FontWeight.normal),
+            style: GoogleFonts.poppins(fontSize: 9.5, fontWeight: estTotal ? FontWeight.bold : FontWeight.normal),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -289,30 +347,43 @@ class _FicheScreenState extends State<FicheScreen> {
   }
 
   // ---------------------------------------------------------------
-  // EXPORT PDF
+  // EXPORT PDF — cellules à taille RIGOUREUSEMENT fixe (largeur ET
+  // hauteur) : avant, seule la largeur était imposée, et un texte un
+  // peu long (nom de propriétaire, observation) faisait grandir la
+  // hauteur de SA ligne uniquement, cassant l'alignement du tableau.
+  // Le texte est maintenant tronqué à l'avance (_tronquer) pour tenir
+  // sur une seule ligne, et chaque cellule a une hauteur Container
+  // explicite + `maxLines: 1` + alignement centré.
   // ---------------------------------------------------------------
   Future<void> _exportPDF(BuildContext context) async {
     setState(() => _exportEnCours = true);
     try {
       final provider = context.read<TroupeauProvider>();
       final lignes = await provider.genererFicheLedger();
-      final groupeLigne = _headerGroupeLigne();
-      final sousLigne = _headerSousLigne();
+      final entetes = _headerLignes();
 
       final pdf = pw.Document();
 
-      pw.Widget cell(String text, double width, {bool bold = false, PdfColor? bg}) {
+      pw.Widget cell(String text, double width, double height, {bool bold = false, PdfColor? bg}) {
         return pw.Container(
           width: width,
-          padding: const pw.EdgeInsets.all(2),
+          height: height,
+          alignment: pw.Alignment.center,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 1.5),
           decoration: pw.BoxDecoration(color: bg, border: pw.Border.all(color: PdfColors.grey400, width: 0.4)),
-          child: pw.Text(text, style: pw.TextStyle(fontSize: 6.5, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal), textAlign: pw.TextAlign.center),
+          child: pw.Text(
+            text,
+            style: pw.TextStyle(fontSize: 6.3, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal),
+            textAlign: pw.TextAlign.center,
+            maxLines: 1,
+            overflow: pw.TextOverflow.clip,
+          ),
         );
       }
 
       pw.Widget entete(List<String> valeurs, PdfColor bg) {
         return pw.Row(
-          children: List.generate(_cols.length, (i) => cell(valeurs[i], _cols[i].width, bold: true, bg: bg)),
+          children: List.generate(_cols.length, (i) => cell(valeurs[i], _cols[i].width, _hauteurLigneEntete, bold: true, bg: bg)),
         );
       }
 
@@ -325,7 +396,7 @@ class _FicheScreenState extends State<FicheScreen> {
         lignesWidgets.add(pw.Row(
           children: List.generate(
             _cols.length,
-            (i) => cell(valeurs[i], _cols[i].width, bold: l.estTotal, bg: l.estTotal ? PdfColors.green50 : null),
+            (i) => cell(valeurs[i], _cols[i].width, _hauteurLigneDonnee, bold: l.estTotal, bg: l.estTotal ? PdfColors.green50 : null),
           ),
         ));
       }
@@ -338,8 +409,9 @@ class _FicheScreenState extends State<FicheScreen> {
             pw.Text('FICHE DE SUIVI DE L\'ÉVOLUTION DU BÉTAIL', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
             pw.Text('Troupeau : ${provider.troupeauSelectionne?.nom ?? '-'}', style: const pw.TextStyle(fontSize: 10)),
             pw.SizedBox(height: 10),
-            entete(groupeLigne, PdfColors.orange100),
-            entete(sousLigne, PdfColors.orange50),
+            entete(entetes[0], PdfColors.orange100),
+            entete(entetes[1], PdfColors.orange50),
+            if (_aUnSousGroupe) entete(entetes[2], PdfColors.orange50),
             ...lignesWidgets,
           ],
         ),
@@ -347,7 +419,7 @@ class _FicheScreenState extends State<FicheScreen> {
 
       final bytes = await pdf.save();
       if (!context.mounted) return;
-      await _sauvegarderEtOuvrir(context, bytes, 'pdf', 'Fiche');
+      await _sauvegarderEtOuvrir(context, bytes, 'pdf', 'application/pdf');
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur PDF : $e')));
@@ -365,6 +437,7 @@ class _FicheScreenState extends State<FicheScreen> {
     try {
       final provider = context.read<TroupeauProvider>();
       final lignes = await provider.genererFicheLedger();
+      final entetes = _headerLignes();
 
       var excelDoc = xls.Excel.createExcel();
       excelDoc.rename('Sheet1', 'Fiche');
@@ -378,8 +451,9 @@ class _FicheScreenState extends State<FicheScreen> {
       sheet.insertRowIterables(versLigne(['Troupeau : ${provider.troupeauSelectionne?.nom ?? '-'}']), rowIndex++);
       rowIndex++; // ligne vide
 
-      sheet.insertRowIterables(versLigne(_headerGroupeLigne()), rowIndex++);
-      sheet.insertRowIterables(versLigne(_headerSousLigne()), rowIndex++);
+      sheet.insertRowIterables(versLigne(entetes[0]), rowIndex++);
+      sheet.insertRowIterables(versLigne(entetes[1]), rowIndex++);
+      if (_aUnSousGroupe) sheet.insertRowIterables(versLigne(entetes[2]), rowIndex++);
 
       DateTime? dernierDateAffichee;
       for (final l in lignes) {
@@ -400,7 +474,12 @@ class _FicheScreenState extends State<FicheScreen> {
       final bytes = excelDoc.encode();
       if (bytes == null) throw Exception('Échec de la génération du fichier Excel');
       if (!context.mounted) return;
-      await _sauvegarderEtOuvrir(context, Uint8List.fromList(bytes), 'xlsx', 'Fiche');
+      await _sauvegarderEtOuvrir(
+        context,
+        Uint8List.fromList(bytes),
+        'xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur Excel : $e')));
@@ -411,35 +490,50 @@ class _FicheScreenState extends State<FicheScreen> {
   }
 
   // ---------------------------------------------------------------
-  // SAUVEGARDE + PARTAGE RÉEL DU FICHIER
+  // SAUVEGARDE : nom de fichier "Fiche_Troupeau_jj-mm-aaaa.ext" et
+  // écriture DIRECTE dans le dossier public Téléchargements (visible
+  // immédiatement dans le gestionnaire de fichiers, sans action
+  // supplémentaire), via un canal natif (MainActivity.kt / MediaStore
+  // sur Android 10+). En parallèle, une copie est conservée dans le
+  // dossier privé de l'app pour permettre le partage natif (bouton
+  // "PARTAGER").
+  //
+  // Note sur le nom de fichier : le format demandé "jj/mm/année" utilise
+  // des "/", interdits dans un nom de fichier — remplacés par des "-"
+  // (Fiche_Troupeau_13-10-2026.pdf).
   // ---------------------------------------------------------------
-  // Note : on utilise uniquement `share_plus` (pas `open_file`, qui embarque
-  // une vieille version de kotlin-stdlib-jdk7/jdk8 provoquant un conflit de
-  // classes dupliquées au build Android : "Duplicate class kotlin.collections
-  // .jdk8..."). Le partage natif Android propose déjà "Ouvrir avec..." dans la
-  // liste des applications, donc on ne perd aucune fonctionnalité.
-  Future<void> _sauvegarderEtOuvrir(BuildContext context, Uint8List bytes, String extension, String prefixe) async {
-    final provider = context.read<TroupeauProvider>();
-    final nomTroupeau = (provider.troupeauSelectionne?.nom ?? 'betail').replaceAll(RegExp(r'\s+'), '_');
-    final horodatage = DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now());
-    final filename = '${prefixe}_${nomTroupeau}_$horodatage.$extension';
+  Future<void> _sauvegarderEtOuvrir(BuildContext context, Uint8List bytes, String extension, String mimeType) async {
+    final filename = 'Fiche_Troupeau_${DateFormat('dd-MM-yyyy').format(DateTime.now())}.$extension';
 
+    bool sauvegardePublique = false;
+    try {
+      await _canalTelechargements.invokeMethod('saveToDownloads', {
+        'fileName': filename,
+        'bytes': bytes,
+        'mimeType': mimeType,
+      });
+      sauvegardePublique = true;
+    } catch (_) {
+      sauvegardePublique = false;
+    }
+
+    // Copie locale (dossier privé de l'app) systématiquement conservée pour
+    // le partage natif, que la sauvegarde publique ait réussi ou non.
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/$filename');
     await file.writeAsBytes(bytes, flush: true);
 
     if (!context.mounted) return;
-
-    // Ouvre directement le sélecteur natif (Ouvrir avec / Enregistrer / Envoyer).
-    await Share.shareXFiles([XFile(file.path)], text: filename);
-
-    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$filename enregistré.'),
+        content: Text(
+          sauvegardePublique
+              ? '$filename enregistré dans Téléchargements.'
+              : '$filename enregistré (dossier de l\'application).',
+        ),
         duration: const Duration(seconds: 4),
         action: SnackBarAction(
-          label: 'REPARTAGER',
+          label: 'PARTAGER',
           onPressed: () => Share.shareXFiles([XFile(file.path)], text: filename),
         ),
       ),

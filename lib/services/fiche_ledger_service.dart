@@ -130,12 +130,19 @@ class FicheLedgerService {
           }
         }
 
+        // "REPORT" (comme sur la fiche papier) : ce jour ne contient, pour ce
+        // propriétaire, QUE des soldes d'ouverture (cheptel initial saisi à
+        // la création d'un propriétaire/troupeau, ou lors d'une scission) —
+        // ce n'est pas un vrai mouvement Achat/Vente/Perte/Naissance.
+        final estReportLigne = mvts.isNotEmpty && mvts.every((m) => m.type == TypeMouvement.report);
+
         // N'ajoute la ligne que si ce propriétaire a un mouvement ce jour-là,
         // OU si c'est le dernier bloc (pour afficher l'état courant complet)
         if (mvts.isNotEmpty || estDerniereDate) {
           lignes.add(FicheLigne(
             date: jour,
             proprietaire: p.nom,
+            estReport: estReportLigne,
             perteT: perteT, perteG: perteG, perteV: perteV, perteVM: perteVM, perteVF: perteVF,
             venteT: venteT, venteG: venteG, venteV: venteV,
             achatT: achatT, achatG: achatG,
@@ -156,11 +163,13 @@ class FicheLedgerService {
       }
 
       final bila = (tAchatT + tAchatG + tNaisM + tNaisF) - (tPerteT + tPerteG + tPerteV + tPerteVM + tPerteVF + tVenteT + tVenteG + tVenteV);
+      final estReportJour = mouvementsJour.isNotEmpty && mouvementsJour.every((m) => m.type == TypeMouvement.report);
 
       lignes.add(FicheLigne(
         date: jour,
         proprietaire: 'TOTAL',
         estTotal: true,
+        estReport: estReportJour,
         perteT: tPerteT, perteG: tPerteG, perteV: tPerteV, perteVM: tPerteVM, perteVF: tPerteVF,
         venteT: tVenteT, venteG: tVenteG, venteV: tVenteV,
         achatT: tAchatT, achatG: tAchatG,
