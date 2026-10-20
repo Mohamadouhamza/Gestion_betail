@@ -1,6 +1,7 @@
 package com.example.gestion_betail
 
 import android.content.ContentValues
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -15,15 +16,18 @@ import java.io.FileOutputStream
 /// "Téléchargements" de l'appareil, visible immédiatement dans le
 /// gestionnaire de fichiers — sans passer par le sélecteur de partage.
 ///
-/// - Android 10+ (API 29+, immense majorité des appareils) : écriture via
-///   MediaStore.Downloads, sans permission particulière requise (stockage
-///   par portée / scoped storage).
-/// - Android < 10 : repli sur l'écriture directe dans le dossier public
-///   Téléchargements (nécessite la permission WRITE_EXTERNAL_STORAGE,
-///   déclarée dans AndroidManifest.xml avec maxSdkVersion=28). Si
-///   l'écriture échoue (permission refusée), l'appel natif échoue
-///   proprement et le code Dart se rabat automatiquement sur le partage
-///   via share_plus.
+/// - Android 10+ (API 29+) : écriture via MediaStore.Downloads, sans
+///   permission particulière (scoped storage). Le fichier est d'abord créé
+///   avec IS_PENDING = 1 (invisible, en cours d'écriture), rempli, puis
+///   publié avec IS_PENDING = 0 : c'est la séquence recommandée par Android ;
+///   sans elle, certains appareils/versions (Android 11+) n'indexent pas
+///   correctement le fichier. Si l'écriture échoue, l'entrée orpheline est
+///   supprimée.
+/// - Android < 10 : écriture directe dans le dossier public Téléchargements
+///   (permission WRITE_EXTERNAL_STORAGE, maxSdkVersion=28 dans le manifeste).
+///
+/// En cas d'échec, l'erreur renvoyée à Dart contient le NOM de l'exception
+/// et son message, affichés tels quels dans l'application pour diagnostic.
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "gestion_betail/downloads"
 
@@ -39,10 +43,13 @@ class MainActivity : FlutterActivity() {
                     return@setMethodCallHandler
                 }
                 try {
-                    val uri = saveToDownloads(fileName, bytes, mimeType)
-                    result.success(uri)
-                } catch (e: Exception) {
-                    result.error("SAVE_FAILED", e.message, null)
+                    result.success(saveToDownloads(fileName, bytes, mimeType))
+                } catch (t: Throwable) {
+                    result.error(
+                        "SAVE_FAILED",
+                        "${t.javaClass.simpleName}: ${t.message}",
+                        "SDK ${Build.VERSION.SDK_INT} / ${Build.MANUFACTURER} ${Build.MODEL}"
+                    )
                 }
             } else {
                 result.notImplemented()
@@ -52,24 +59,51 @@ class MainActivity : FlutterActivity() {
 
     private fun saveToDownloads(fileName: String, bytes: ByteArray, mimeType: String): String {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val resolver = applicationContext.contentResolver
-            val values = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-            }
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                ?: throw Exception("Impossible de créer le fichier dans Téléchargements")
-            resolver.openOutputStream(uri)?.use { it.write(bytes) }
-                ?: throw Exception("Impossible d'ouvrir le flux d'écriture")
-            return uri.toString()
-        } else {
-            @Suppress("DEPRECATION")
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            if (!downloadsDir.exists()) downloadsDir.mkdirs()
-            val file = File(downloadsDir, fileName)
-            FileOutputStream(file).use { it.write(bytes) }
-            return file.absolutePath
+            return saveWithMediaStore(fileName, bytes, mimeType)
         }
+        return saveLegacy(fileName, bytes)
+    }
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.Q)
+    private fun saveWithMediaStore(fileName: String, bytes: ByteArray, mimeType: String): String {
+        val resolver = applicationContext.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val uri: Uri = resolver.insert(collection, values)
+            ?: throw IllegalStateException("MediaStore.insert a renvoyé null (impossible de créer l'entrée dans Téléchargements)")
+        try {
+            val stream = resolver.openOutputStream(uri, "w")
+                ?: throw IllegalStateException("openOutputStream a renvoyé null pour $uri")
+            stream.use {
+                it.write(bytes)
+                it.flush()
+            }
+            val publie = ContentValues().apply {
+                put(MediaStore.MediaColumns.IS_PENDING, 0)
+            }
+            resolver.update(uri, publie, null, null)
+        } catch (t: Throwable) {
+            // Ne laisse pas d'entrée orpheline (fichier vide/invisible).
+            try {
+                resolver.delete(uri, null, null)
+            } catch (_: Throwable) {
+            }
+            throw t
+        }
+        return uri.toString()
+    }
+
+    private fun saveLegacy(fileName: String, bytes: ByteArray): String {
+        @Suppress("DEPRECATION")
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!downloadsDir.exists()) downloadsDir.mkdirs()
+        val file = File(downloadsDir, fileName)
+        FileOutputStream(file).use { it.write(bytes) }
+        return file.absolutePath
     }
 }

@@ -5,11 +5,15 @@ import '../models/enums.dart';
 import '../models/models.dart';
 import '../providers/troupeau_provider.dart';
 import '../theme/app_colors.dart';
+import '../widgets/cheptel_champs.dart';
 
 /// "Scinder un troupeau existant" : crée un nouveau troupeau en prélevant
 /// une partie du cheptel d'un troupeau existant (ex : séparer un troupeau de
-/// 50 têtes en deux troupeaux de 25). Contrairement à "Nouveau troupeau",
-/// les quantités saisies sont RETIRÉES du troupeau source.
+/// 50 têtes en deux troupeaux de 25). On peut prélever chez PLUSIEURS
+/// propriétaires du troupeau source en une seule opération ; pour chacun,
+/// les quantités sont plafonnées à son stock réel dans ce troupeau.
+/// Contrairement à "Nouveau troupeau", les quantités saisies sont RETIRÉES
+/// du troupeau source.
 class ScinderTroupeauScreen extends StatefulWidget {
   const ScinderTroupeauScreen({super.key});
 
@@ -22,13 +26,10 @@ class _ScinderTroupeauScreenState extends State<ScinderTroupeauScreen> {
   final _nomCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
   Troupeau? _troupeauSource;
-  Proprietaire? _proprietaire;
   List<Proprietaire> _proprietairesAvecStock = [];
-  Situation? _stockDisponible;
+  final Map<int, Situation> _stocks = {};
+  final Map<int, CheptelControleurs> _saisies = {};
   bool _chargementStock = false;
-  final Map<CategorieAnimal, TextEditingController> _quantiteCtrls = {
-    for (final c in CategorieAnimal.values) c: TextEditingController(text: '0'),
-  };
   bool _enregistrementEnCours = false;
 
   @override
@@ -38,7 +39,7 @@ class _ScinderTroupeauScreenState extends State<ScinderTroupeauScreen> {
       final provider = context.read<TroupeauProvider>();
       if (provider.troupeaux.isNotEmpty) {
         setState(() => _troupeauSource = provider.troupeauSelectionne ?? provider.troupeaux.first);
-        _chargerProprietairesEtStock();
+        _chargerStocks();
       }
     });
   }
@@ -47,44 +48,44 @@ class _ScinderTroupeauScreenState extends State<ScinderTroupeauScreen> {
   void dispose() {
     _nomCtrl.dispose();
     _codeCtrl.dispose();
-    for (final c in _quantiteCtrls.values) {
+    for (final c in _saisies.values) {
       c.dispose();
     }
     super.dispose();
   }
 
-  Future<void> _chargerProprietairesEtStock() async {
-    if (_troupeauSource?.id == null) return;
-    setState(() {
-      _chargementStock = true;
-      _proprietaire = null;
-      _stockDisponible = null;
-    });
-    final provider = context.read<TroupeauProvider>();
-    final ids = await provider.getProprietaireIdsAvecStock(_troupeauSource!.id!);
-    final props = provider.proprietaires.where((p) => ids.contains(p.id)).toList();
-    if (!mounted) return;
-    setState(() {
-      _proprietairesAvecStock = props;
-      _proprietaire = props.isNotEmpty ? props.first : null;
-      _chargementStock = false;
-    });
-    if (_proprietaire != null) await _chargerStockProprietaire();
-  }
-
-  Future<void> _chargerStockProprietaire() async {
-    if (_troupeauSource?.id == null || _proprietaire?.id == null) return;
+  Future<void> _chargerStocks() async {
+    final source = _troupeauSource;
+    if (source?.id == null) return;
     setState(() => _chargementStock = true);
-    final s = await context.read<TroupeauProvider>().getSituationPourProprietaire(_proprietaire!.id!);
+    final provider = context.read<TroupeauProvider>();
+    final ids = await provider.getProprietaireIdsAvecStock(source!.id!);
+    final props = provider.proprietaires.where((p) => ids.contains(p.id)).toList();
+    final stocks = <int, Situation>{};
+    for (final p in props) {
+      stocks[p.id!] = await provider.getSituationDansTroupeau(source.id!, p.id!);
+    }
     if (!mounted) return;
     setState(() {
-      _stockDisponible = s;
+      for (final c in _saisies.values) {
+        c.dispose();
+      }
+      _saisies.clear();
+      _stocks
+        ..clear()
+        ..addAll(stocks);
+      for (final p in props) {
+        _saisies[p.id!] = CheptelControleurs();
+      }
+      _proprietairesAvecStock = props;
       _chargementStock = false;
     });
-    _formKey.currentState?.validate();
   }
 
-  int _maxPour(CategorieAnimal cat) => _stockDisponible?.getByCategorie(cat) ?? 0;
+  Map<CategorieAnimal, int> _plafonds(int proprietaireId) {
+    final s = _stocks[proprietaireId];
+    return {for (final c in CategorieAnimal.values) c: s?.getByCategorie(c) ?? 0};
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +114,7 @@ class _ScinderTroupeauScreenState extends State<ScinderTroupeauScreen> {
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Les quantités saisies ci-dessous seront RETIRÉES du troupeau source et transférées au nouveau troupeau.',
+                          'Les quantités saisies seront RETIRÉES du troupeau source et transférées au nouveau troupeau. Vous pouvez prélever chez plusieurs propriétaires à la fois.',
                         ),
                       ),
                     ],
@@ -130,27 +131,11 @@ class _ScinderTroupeauScreenState extends State<ScinderTroupeauScreen> {
                   items: provider.troupeaux.map((t) => DropdownMenuItem(value: t, child: Text(t.nom))).toList(),
                   onChanged: (t) {
                     setState(() => _troupeauSource = t);
-                    _chargerProprietairesEtStock();
+                    _chargerStocks();
                   },
                   validator: (t) => t == null ? 'Sélectionnez un troupeau source' : null,
                 ),
               const SizedBox(height: 16),
-              if (_chargementStock)
-                const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()))
-              else if (_proprietairesAvecStock.isEmpty)
-                Text('Ce troupeau n\'a aucun cheptel à scinder.', style: GoogleFonts.poppins(color: Colors.grey.shade600))
-              else
-                DropdownButtonFormField<Proprietaire>(
-                  value: _proprietaire,
-                  decoration: InputDecoration(labelText: 'Propriétaire à scinder *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                  items: _proprietairesAvecStock.map((p) => DropdownMenuItem(value: p, child: Text(p.nom))).toList(),
-                  onChanged: (p) {
-                    setState(() => _proprietaire = p);
-                    _chargerStockProprietaire();
-                  },
-                  validator: (p) => p == null ? 'Sélectionnez un propriétaire' : null,
-                ),
-              const SizedBox(height: 20),
               TextFormField(
                 controller: _nomCtrl,
                 decoration: InputDecoration(labelText: 'Nom du nouveau troupeau *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
@@ -161,36 +146,31 @@ class _ScinderTroupeauScreenState extends State<ScinderTroupeauScreen> {
                 controller: _codeCtrl,
                 decoration: InputDecoration(labelText: 'Code (ex : AH2)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
               ),
-              const SizedBox(height: 20),
-              Text('Quantités à prélever', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 24),
+              Text('Quantités à prélever, par propriétaire', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: CategorieAnimal.values.map((cat) {
-                  final max = _maxPour(cat);
-                  return SizedBox(
-                    width: 150,
-                    child: TextFormField(
-                      controller: _quantiteCtrls[cat],
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: '${cat.code} – ${cat.label}',
-                        helperText: 'Dispo : $max',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        isDense: true,
+              if (_chargementStock)
+                const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()))
+              else if (_proprietairesAvecStock.isEmpty)
+                Text('Ce troupeau n\'a aucun cheptel à scinder.', style: GoogleFonts.poppins(color: Colors.grey.shade600))
+              else
+                ..._proprietairesAvecStock.map((p) => Card(
+                      key: ValueKey('scission-${_troupeauSource?.id}-${p.id}'),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Colors.grey.shade300)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(p.nom, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: AppColors.vertPrincipal)),
+                            const SizedBox(height: 10),
+                            CheptelChamps(controleurs: _saisies[p.id!]!, plafonds: _plafonds(p.id!)),
+                          ],
+                        ),
                       ),
-                      validator: (v) {
-                        final n = int.tryParse((v ?? '').trim().isEmpty ? '0' : v!.trim());
-                        if (n == null || n < 0) return 'Invalide';
-                        if (n > max) return 'Max $max';
-                        return null;
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 28),
+                    )),
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 height: 54,
@@ -200,7 +180,7 @@ class _ScinderTroupeauScreenState extends State<ScinderTroupeauScreen> {
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  onPressed: (_enregistrementEnCours || _proprietaire == null) ? null : _enregistrer,
+                  onPressed: (_enregistrementEnCours || _proprietairesAvecStock.isEmpty) ? null : _enregistrer,
                   child: _enregistrementEnCours
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : Text('SCINDER LE TROUPEAU', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
@@ -215,10 +195,11 @@ class _ScinderTroupeauScreenState extends State<ScinderTroupeauScreen> {
 
   Future<void> _enregistrer() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    final quantites = <CategorieAnimal, int>{
-      for (final c in CategorieAnimal.values) c: int.tryParse(_quantiteCtrls[c]!.text.trim()) ?? 0,
+    final parProprietaire = <int, Map<CategorieAnimal, int>>{
+      for (final e in _saisies.entries) e.key: e.value.valeurs(),
     };
-    if (quantites.values.every((q) => q == 0)) {
+    final total = parProprietaire.values.fold<int>(0, (s, m) => s + m.values.fold(0, (a, b) => a + b));
+    if (total == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Indiquez au moins une quantité à prélever.')),
       );
@@ -228,10 +209,9 @@ class _ScinderTroupeauScreenState extends State<ScinderTroupeauScreen> {
     try {
       await context.read<TroupeauProvider>().scinderTroupeau(
             troupeauSourceId: _troupeauSource!.id!,
-            proprietaireId: _proprietaire!.id!,
             nomNouveauTroupeau: _nomCtrl.text.trim(),
             codeNouveauTroupeau: _codeCtrl.text.trim().isEmpty ? null : _codeCtrl.text.trim(),
-            quantites: quantites,
+            quantitesParProprietaire: parProprietaire,
           );
       if (!mounted) return;
       Navigator.pop(context);

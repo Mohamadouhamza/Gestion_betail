@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../models/enums.dart';
 import '../models/models.dart';
 import '../providers/troupeau_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/carte_situation.dart';
+import 'ajouter_cheptel_screen.dart';
+import 'nouveau_proprietaire_screen.dart';
 
 /// Onglet "Propriétaire" (remplace l'ancien onglet "Historique", redondant
 /// car déjà accessible via l'icône dans l'en-tête de l'accueil).
@@ -26,20 +27,51 @@ class ProprietairesScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.vertPrincipal,
-        icon: const Icon(Icons.person_add),
-        label: Text('Nouveau propriétaire', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-        onPressed: () => _showAjouterProprietaire(context),
+      // Le bouton est dans un Stack (et non dans Scaffold.floatingActionButton) :
+      // ce Scaffold est imbriqué dans celui de la navigation, dont la barre
+      // flottante est dessinée PAR-DESSUS le corps (extendBody) — le FAB
+      // standard se retrouvait caché derrière elle. Ici il est ancré au-dessus
+      // de la barre, quelle que soit la taille de l'écran.
+      body: Stack(
+        children: [
+          Positioned.fill(child: _liste()),
+          Positioned(
+            right: 16,
+            bottom: _decalageAuDessusDeLaNavbar(context),
+            child: FloatingActionButton.extended(
+              heroTag: null,
+              backgroundColor: AppColors.vertPrincipal,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.person_add),
+              label: Text('Nouveau propriétaire', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NouveauProprietaireScreen()),
+              ),
+            ),
+          ),
+        ],
       ),
-      body: Consumer<TroupeauProvider>(
+    );
+  }
+
+  /// Distance entre le bas de l'écran et le bas du bouton flottant : hauteur
+  /// de la barre de navigation flottante (68) + sa marge basse (au moins 14,
+  /// ou la zone de gestes du système si elle est plus grande) + un espace.
+  static double _decalageAuDessusDeLaNavbar(BuildContext context) {
+    final bas = MediaQuery.of(context).viewPadding.bottom;
+    return (bas > 14 ? bas : 14) + 68 + 14;
+  }
+
+  Widget _liste() {
+    return Consumer<TroupeauProvider>(
         builder: (context, provider, child) {
           if (provider.proprietaires.isEmpty) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Aucun propriétaire pour l\'instant.\nAjoutez-en un avec le bouton ci-dessous.',
+                  'Aucun propriétaire pour l\'instant.\nAjoutez-en un avec le bouton vert « Nouveau propriétaire ».',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(color: Colors.grey.shade600),
                 ),
@@ -47,7 +79,7 @@ class ProprietairesScreen extends StatelessWidget {
             );
           }
           return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 110),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 200),
             itemCount: provider.proprietaires.length,
             itemBuilder: (context, index) {
               final p = provider.proprietaires[index];
@@ -63,7 +95,7 @@ class ProprietairesScreen extends StatelessWidget {
                   ),
                   title: Text(p.nom, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                   subtitle: Text(
-                    'Troupeau : ${provider.troupeauSelectionne?.nom ?? '-'}',
+                    (p.telephone != null && p.telephone!.isNotEmpty) ? p.telephone! : 'Appuyez pour voir sa situation',
                     style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
                   ),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
@@ -79,99 +111,6 @@ class ProprietairesScreen extends StatelessWidget {
             },
           );
         },
-      ),
-    );
-  }
-
-  void _showAjouterProprietaire(BuildContext context) {
-    final nomCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final quantiteCtrls = {for (final c in CategorieAnimal.values) c: TextEditingController(text: '0')};
-    final provider = context.read<TroupeauProvider>();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Nouveau propriétaire', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: nomCtrl,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: 'Nom *',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Le nom est obligatoire' : null,
-                  ),
-                  const SizedBox(height: 20),
-                  Text('Cheptel existant (optionnel)', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                  Text(
-                    'Ajouté directement au troupeau "${provider.troupeauSelectionne?.nom ?? '-'}" comme solde d\'ouverture (REPORT).',
-                    style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: CategorieAnimal.values.map((cat) {
-                      return SizedBox(
-                        width: 130,
-                        child: TextFormField(
-                          controller: quantiteCtrls[cat],
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: '${cat.code} – ${cat.label}',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            isDense: true,
-                          ),
-                          validator: (v) {
-                            final n = int.tryParse(v?.trim().isEmpty ?? true ? '0' : v!.trim());
-                            if (n == null || n < 0) return 'Invalide';
-                            return null;
-                          },
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.vertPrincipal,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: () {
-                        if (!(formKey.currentState?.validate() ?? false)) return;
-                        final cheptel = <CategorieAnimal, int>{
-                          for (final c in CategorieAnimal.values) c: int.tryParse(quantiteCtrls[c]!.text.trim()) ?? 0,
-                        };
-                        provider.ajouterProprietaireAvecCheptel(nomCtrl.text.trim(), cheptel: cheptel);
-                        Navigator.pop(ctx);
-                      },
-                      child: Text('Ajouter', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -197,6 +136,14 @@ class _ProprietaireDetailScreenState extends State<ProprietaireDetailScreen> {
 
   void _charger() {
     _future = context.read<TroupeauProvider>().getSituationPourProprietaire(widget.proprietaire.id!);
+  }
+
+  Future<void> _ajouterCheptel() async {
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => AjouterCheptelScreen(proprietaireFixe: widget.proprietaire)),
+    );
+    if (ok == true && mounted) setState(_charger);
   }
 
   @override
@@ -249,6 +196,18 @@ class _ProprietaireDetailScreenState extends State<ProprietaireDetailScreen> {
               ),
               const SizedBox(height: 16),
               CarteGestation(valeur: s.gestation),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: _ajouterCheptel,
+                icon: const Icon(Icons.add_circle_outline),
+                label: Text('Ajouter du cheptel dans un troupeau', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.vertPrincipal,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
             ],
           );
         },

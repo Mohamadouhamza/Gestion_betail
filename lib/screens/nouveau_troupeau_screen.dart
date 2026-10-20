@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../models/enums.dart';
 import '../models/models.dart';
 import '../providers/troupeau_provider.dart';
 import '../theme/app_colors.dart';
+import '../widgets/cheptel_champs.dart';
 
-/// "Nouveau troupeau" : scénario additif (ex. troupeau reçu en cadeau par un
-/// ami, ou simplement un nouveau troupeau à suivre). Le cheptel saisi ici
-/// s'AJOUTE, sans rien retirer à aucun troupeau existant.
-/// Pour prélever une partie d'un troupeau existant, voir ScinderTroupeauScreen.
+/// "Nouveau troupeau" : un troupeau peut contenir le bétail de PLUSIEURS
+/// propriétaires (comme sur la fiche papier : ABDOUL et ALI dans le même
+/// troupeau). On saisit donc une liste répétable de blocs "propriétaire +
+/// cheptel" (zéro, un ou plusieurs). Le cheptel saisi s'AJOUTE, sans rien
+/// retirer à aucun troupeau existant. Pour prélever une partie d'un
+/// troupeau existant, voir ScinderTroupeauScreen.
 class NouveauTroupeauScreen extends StatefulWidget {
   const NouveauTroupeauScreen({super.key});
 
@@ -17,35 +19,39 @@ class NouveauTroupeauScreen extends StatefulWidget {
   State<NouveauTroupeauScreen> createState() => _NouveauTroupeauScreenState();
 }
 
+class _BlocProprietaire {
+  final Key key = UniqueKey();
+  Proprietaire? proprietaire;
+  final CheptelControleurs cheptel = CheptelControleurs();
+}
+
 class _NouveauTroupeauScreenState extends State<NouveauTroupeauScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nomCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
-  Proprietaire? _proprietaire;
-  final Map<CategorieAnimal, TextEditingController> _quantiteCtrls = {
-    for (final c in CategorieAnimal.values) c: TextEditingController(text: '0'),
-  };
+  final List<_BlocProprietaire> _blocs = [_BlocProprietaire()];
   bool _enregistrementEnCours = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<TroupeauProvider>();
-      if (provider.proprietaires.isNotEmpty) {
-        setState(() => _proprietaire = provider.proprietaireSelectionne ?? provider.proprietaires.first);
-      }
-    });
-  }
 
   @override
   void dispose() {
     _nomCtrl.dispose();
     _codeCtrl.dispose();
-    for (final c in _quantiteCtrls.values) {
-      c.dispose();
+    for (final b in _blocs) {
+      b.cheptel.dispose();
     }
     super.dispose();
+  }
+
+  void _ajouterBloc() => setState(() => _blocs.add(_BlocProprietaire()));
+
+  void _supprimerBloc(_BlocProprietaire b) {
+    setState(() => _blocs.remove(b));
+    b.cheptel.dispose();
+  }
+
+  Future<void> _creerProprietairePour(_BlocProprietaire b) async {
+    final p = await demanderNouveauProprietaire(context);
+    if (p != null && mounted) setState(() => b.proprietaire = p);
   }
 
   @override
@@ -75,7 +81,7 @@ class _NouveauTroupeauScreenState extends State<NouveauTroupeauScreen> {
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Ce troupeau est ajouté avec son propre cheptel, sans rien retirer à vos troupeaux existants (ex : troupeau reçu).',
+                          'Un troupeau peut réunir le bétail de plusieurs propriétaires. Le cheptel saisi est ajouté sans rien retirer à vos troupeaux existants.',
                         ),
                       ),
                     ],
@@ -94,49 +100,20 @@ class _NouveauTroupeauScreenState extends State<NouveauTroupeauScreen> {
                 controller: _codeCtrl,
                 decoration: InputDecoration(labelText: 'Code (ex : AH)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
               ),
-              const SizedBox(height: 16),
-              if (provider.proprietaires.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12)),
-                  child: Text(
-                    'Aucun propriétaire enregistré. Ajoutez-en un depuis l\'onglet "Propriétaire" avant de créer un troupeau.',
-                    style: GoogleFonts.poppins(color: Colors.orange.shade800),
-                  ),
-                )
-              else
-                DropdownButtonFormField<Proprietaire>(
-                  value: _proprietaire,
-                  decoration: InputDecoration(labelText: 'Propriétaire du cheptel *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                  items: provider.proprietaires.map((p) => DropdownMenuItem(value: p, child: Text(p.nom))).toList(),
-                  onChanged: (p) => setState(() => _proprietaire = p),
-                  validator: (p) => p == null ? 'Sélectionnez un propriétaire' : null,
-                ),
-              const SizedBox(height: 20),
-              Text('Cheptel initial (optionnel)', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 24),
+              Text('Propriétaires et cheptel (optionnel)', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: CategorieAnimal.values.map((cat) {
-                  return SizedBox(
-                    width: 150,
-                    child: TextFormField(
-                      controller: _quantiteCtrls[cat],
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: '${cat.code} – ${cat.label}',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        isDense: true,
-                      ),
-                      validator: (v) {
-                        final n = int.tryParse((v ?? '').trim().isEmpty ? '0' : v!.trim());
-                        if (n == null || n < 0) return 'Invalide';
-                        return null;
-                      },
-                    ),
-                  );
-                }).toList(),
+              ..._blocs.asMap().entries.map((e) => _construireBloc(provider, e.key, e.value)),
+              const SizedBox(height: 4),
+              OutlinedButton.icon(
+                onPressed: _ajouterBloc,
+                icon: const Icon(Icons.person_add_alt_1),
+                label: const Text('Ajouter un propriétaire'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.vertPrincipal,
+                  minimumSize: const Size.fromHeight(46),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
               const SizedBox(height: 28),
               SizedBox(
@@ -148,7 +125,7 @@ class _NouveauTroupeauScreenState extends State<NouveauTroupeauScreen> {
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  onPressed: (_enregistrementEnCours || provider.proprietaires.isEmpty) ? null : _enregistrer,
+                  onPressed: _enregistrementEnCours ? null : _enregistrer,
                   child: _enregistrementEnCours
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : Text('CRÉER LE TROUPEAU', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
@@ -161,18 +138,78 @@ class _NouveauTroupeauScreenState extends State<NouveauTroupeauScreen> {
     );
   }
 
+  Widget _construireBloc(TroupeauProvider provider, int index, _BlocProprietaire bloc) {
+    // Un propriétaire ne peut figurer qu'une fois dans le même troupeau.
+    final dejaChoisis = _blocs.where((b) => b != bloc && b.proprietaire != null).map((b) => b.proprietaire!.id).toSet();
+    final disponibles = provider.proprietaires.where((p) => !dejaChoisis.contains(p.id)).toList();
+    return Card(
+      key: bloc.key,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Colors.grey.shade300)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('Propriétaire ${index + 1}', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: AppColors.vertPrincipal)),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'Retirer ce propriétaire',
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                  onPressed: () => _supprimerBloc(bloc),
+                ),
+              ],
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<Proprietaire>(
+                    key: ValueKey('prop-${bloc.key}-${bloc.proprietaire?.id}'),
+                    value: bloc.proprietaire != null && disponibles.any((p) => p.id == bloc.proprietaire!.id)
+                        ? disponibles.firstWhere((p) => p.id == bloc.proprietaire!.id)
+                        : null,
+                    isExpanded: true,
+                    decoration: InputDecoration(labelText: 'Propriétaire *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                    items: disponibles.map((p) => DropdownMenuItem(value: p, child: Text(p.nom, overflow: TextOverflow.ellipsis))).toList(),
+                    onChanged: (p) => setState(() => bloc.proprietaire = p),
+                    validator: (p) => p == null ? 'Sélectionnez un propriétaire' : null,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: IconButton.filledTonal(
+                    tooltip: 'Nouveau propriétaire',
+                    icon: const Icon(Icons.add),
+                    onPressed: () => _creerProprietairePour(bloc),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text('Cheptel de ce propriétaire', style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade700)),
+            const SizedBox(height: 8),
+            CheptelChamps(controleurs: bloc.cheptel),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _enregistrer() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _enregistrementEnCours = true);
-    final cheptel = <CategorieAnimal, int>{
-      for (final c in CategorieAnimal.values) c: int.tryParse(_quantiteCtrls[c]!.text.trim()) ?? 0,
-    };
+    final blocs = _blocs
+        .map((b) => BlocProprietaireCheptel(b.proprietaire!.id!, b.cheptel.valeurs()))
+        .toList();
     try {
-      await context.read<TroupeauProvider>().ajouterTroupeauAvecCheptel(
+      await context.read<TroupeauProvider>().ajouterTroupeauAvecProprietaires(
             _nomCtrl.text.trim(),
             code: _codeCtrl.text.trim().isEmpty ? null : _codeCtrl.text.trim(),
-            proprietaireId: _proprietaire!.id!,
-            cheptel: cheptel,
+            blocs: blocs,
           );
       if (!mounted) return;
       Navigator.pop(context);

@@ -230,49 +230,101 @@ class TroupeauProvider extends ChangeNotifier {
     await rafraichirDonnees();
   }
 
-  Future<void> ajouterProprietaire(String nom, {String? prenom, String? telephone}) async {
+  /// Crée un propriétaire (sans cheptel) et le renvoie. Il devient le
+  /// propriétaire par défaut des formulaires.
+  Future<Proprietaire> ajouterProprietaire(String nom, {String? prenom, String? telephone}) async {
     final id = await _db.insertProprietaire(Proprietaire(nom: nom, prenom: prenom, telephone: telephone));
     _proprietaires = await _db.getProprietaires();
-    _proprietaireSelectionne = _proprietaires.firstWhere((p) => p.id == id);
+    final cree = _proprietaires.firstWhere((p) => p.id == id);
+    _proprietaireSelectionne = cree;
     notifyListeners();
+    return cree;
   }
 
-  /// Création COMPLÈTE d'un propriétaire : son cheptel existant (par
-  /// catégorie) est enregistré dans la foulée, sous forme d'un solde
-  /// d'ouverture ("REPORT" sur la fiche — PAS un mouvement d'achat/vente/
-  /// perte/naissance) plutôt qu'en deux temps via l'écran de mouvement.
-  Future<void> ajouterProprietaireAvecCheptel(
-    String nom, {
-    String? prenom,
-    String? telephone,
+  /// Enregistre un solde d'ouverture ("REPORT" sur la fiche — PAS un
+  /// mouvement d'achat/vente/perte/naissance) : un mouvement de type report
+  /// + un ajout au lot (fusion dans un lot non gestant de la même catégorie
+  /// s'il existe, sinon nouveau lot). Ne rafraîchit pas : à l'appelant.
+  Future<void> _ecrireCheptelOuverture({
+    required int troupeauId,
+    required int proprietaireId,
     required Map<CategorieAnimal, int> cheptel,
-    int? troupeauId,
+    required String note,
   }) async {
-    final id = await _db.insertProprietaire(Proprietaire(nom: nom, prenom: prenom, telephone: telephone));
-    final tId = troupeauId ?? _troupeauSelectionne?.id;
-    if (tId != null) {
-      for (final entry in cheptel.entries) {
-        if (entry.value <= 0) continue;
-        await _db.insertMouvement(Mouvement(
-          troupeauId: tId,
-          proprietaireId: id,
-          type: TypeMouvement.report,
-          categorie: entry.key,
-          quantite: entry.value,
-          date: DateTime.now(),
-          notes: 'Cheptel initial à la création du propriétaire',
-        ));
+    final maintenant = DateTime.now();
+    for (final entry in cheptel.entries) {
+      if (entry.value <= 0) continue;
+      await _db.insertMouvement(Mouvement(
+        troupeauId: troupeauId,
+        proprietaireId: proprietaireId,
+        type: TypeMouvement.report,
+        categorie: entry.key,
+        quantite: entry.value,
+        date: maintenant,
+        notes: note,
+      ));
+      final existants = await _db.getLots(
+        troupeauId: troupeauId,
+        proprietaireId: proprietaireId,
+        categorie: entry.key,
+      );
+      final fusionnables = existants.where((l) => !l.enGestation).toList();
+      if (fusionnables.isNotEmpty) {
+        final lot = fusionnables.first;
+        await _db.updateLotQuantite(lot.id!, lot.quantite + entry.value);
+      } else {
         await _db.insertLot(LotAnimal(
-          troupeauId: tId,
-          proprietaireId: id,
+          troupeauId: troupeauId,
+          proprietaireId: proprietaireId,
           categorie: entry.key,
           quantite: entry.value,
-          dateNaissance: DateTime.now(),
+          dateNaissance: maintenant,
         ));
       }
     }
+  }
+
+  /// Création COMPLÈTE d'un propriétaire : un ou plusieurs blocs
+  /// "troupeau + cheptel" (un propriétaire peut avoir du bétail dans
+  /// plusieurs troupeaux). Zéro bloc = propriétaire créé sans cheptel.
+  Future<Proprietaire> ajouterProprietaireAvecCheptels(
+    String nom, {
+    String? prenom,
+    String? telephone,
+    List<BlocTroupeauCheptel> blocs = const [],
+  }) async {
+    final id = await _db.insertProprietaire(Proprietaire(nom: nom, prenom: prenom, telephone: telephone));
+    for (final b in blocs) {
+      await _ecrireCheptelOuverture(
+        troupeauId: b.troupeauId,
+        proprietaireId: id,
+        cheptel: b.cheptel,
+        note: 'Cheptel initial à la création du propriétaire',
+      );
+    }
     _proprietaires = await _db.getProprietaires();
-    _proprietaireSelectionne = _proprietaires.firstWhere((p) => p.id == id);
+    final cree = _proprietaires.firstWhere((p) => p.id == id);
+    _proprietaireSelectionne = cree;
+    await rafraichirDonnees();
+    return cree;
+  }
+
+  /// Ajoute du cheptel (solde d'ouverture) d'un propriétaire DÉJÀ existant
+  /// dans un troupeau DÉJÀ existant. Sert aux deux entrées : "ajouter un
+  /// propriétaire à ce troupeau" (depuis l'accueil) et "ajouter du cheptel
+  /// dans un troupeau" (depuis la fiche d'un propriétaire).
+  Future<void> attribuerCheptel({
+    required int troupeauId,
+    required int proprietaireId,
+    required Map<CategorieAnimal, int> cheptel,
+    String note = 'Cheptel ajouté au troupeau',
+  }) async {
+    await _ecrireCheptelOuverture(
+      troupeauId: troupeauId,
+      proprietaireId: proprietaireId,
+      cheptel: cheptel,
+      note: note,
+    );
     await rafraichirDonnees();
   }
 
@@ -283,97 +335,85 @@ class TroupeauProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// "Nouveau troupeau" (scénario don / ajout net) : un troupeau est créé
-  /// avec son propre cheptel initial pour un propriétaire donné. N'enlève
-  /// RIEN à aucun troupeau existant.
-  Future<void> ajouterTroupeauAvecCheptel(
+  /// "Nouveau troupeau" : un troupeau est créé avec zéro, un ou plusieurs
+  /// blocs "propriétaire + cheptel" (un troupeau peut contenir le bétail de
+  /// plusieurs propriétaires, comme sur la fiche papier). N'enlève RIEN à
+  /// aucun troupeau existant.
+  Future<void> ajouterTroupeauAvecProprietaires(
     String nom, {
     String? code,
-    required int proprietaireId,
-    required Map<CategorieAnimal, int> cheptel,
+    List<BlocProprietaireCheptel> blocs = const [],
   }) async {
     final id = await _db.insertTroupeau(Troupeau(nom: nom, code: code));
-    for (final entry in cheptel.entries) {
-      if (entry.value <= 0) continue;
-      await _db.insertMouvement(Mouvement(
+    for (final b in blocs) {
+      await _ecrireCheptelOuverture(
         troupeauId: id,
-        proprietaireId: proprietaireId,
-        type: TypeMouvement.report,
-        categorie: entry.key,
-        quantite: entry.value,
-        date: DateTime.now(),
-        notes: 'Cheptel initial à la création du troupeau',
-      ));
-      await _db.insertLot(LotAnimal(
-        troupeauId: id,
-        proprietaireId: proprietaireId,
-        categorie: entry.key,
-        quantite: entry.value,
-        dateNaissance: DateTime.now(),
-      ));
+        proprietaireId: b.proprietaireId,
+        cheptel: b.cheptel,
+        note: 'Cheptel initial à la création du troupeau',
+      );
     }
     _troupeaux = await _db.getTroupeaux();
     _troupeauSelectionne = _troupeaux.firstWhere((t) => t.id == id);
     await rafraichirDonnees();
   }
 
+  /// Situation d'UN propriétaire dans un troupeau PRÉCIS (pas forcément le
+  /// troupeau sélectionné) — utilisé pour plafonner les quantités d'une
+  /// scission.
+  Future<Situation> getSituationDansTroupeau(int troupeauId, int proprietaireId) =>
+      _db.getSituation(troupeauId: troupeauId, proprietaireId: proprietaireId);
+
   /// "Scinder un troupeau existant" : crée un nouveau troupeau en
-  /// prélevant les quantités indiquées sur le troupeau source, pour un
-  /// propriétaire donné. Contrairement à "Nouveau troupeau", ceci RETIRE
-  /// les quantités du troupeau source (ce n'est pas un ajout net).
-  /// Le transfert n'est pas comptabilisé comme une "Perte" sur la fiche
-  /// (ce n'est pas une sortie réelle du cheptel du propriétaire) : les lots
-  /// sont déplacés directement, et le nouveau troupeau reçoit un solde
-  /// d'ouverture ("REPORT").
+  /// prélevant, sur le troupeau source, les quantités de UN OU PLUSIEURS
+  /// propriétaires en une seule opération ([quantitesParProprietaire] :
+  /// proprietaireId -> catégorie -> quantité). Contrairement à "Nouveau
+  /// troupeau", ceci RETIRE les quantités du troupeau source. Le transfert
+  /// n'est pas comptabilisé comme une "Perte" : les lots sont déplacés et le
+  /// nouveau troupeau reçoit un solde d'ouverture ("REPORT").
   Future<void> scinderTroupeau({
     required int troupeauSourceId,
-    required int proprietaireId,
     required String nomNouveauTroupeau,
     String? codeNouveauTroupeau,
-    required Map<CategorieAnimal, int> quantites,
+    required Map<int, Map<CategorieAnimal, int>> quantitesParProprietaire,
   }) async {
     final nouveauId = await _db.insertTroupeau(Troupeau(nom: nomNouveauTroupeau, code: codeNouveauTroupeau));
 
-    for (final entry in quantites.entries) {
-      final qte = entry.value;
-      if (qte <= 0) continue;
+    for (final parProp in quantitesParProprietaire.entries) {
+      final proprietaireId = parProp.key;
+      final prelevement = <CategorieAnimal, int>{};
 
-      // Retire la quantité du troupeau source (lots les plus anciens d'abord).
-      var reste = qte;
-      final lotsSource = await _db.getLots(
-        troupeauId: troupeauSourceId,
-        proprietaireId: proprietaireId,
-        categorie: entry.key,
-      )
-        ..sort((a, b) => a.dateNaissance.compareTo(b.dateNaissance));
-      for (final lot in lotsSource) {
-        if (reste <= 0) break;
-        if (lot.quantite <= reste) {
-          reste -= lot.quantite;
-          await _db.deleteLot(lot.id!);
-        } else {
-          await _db.updateLotQuantite(lot.id!, lot.quantite - reste);
-          reste = 0;
+      for (final entry in parProp.value.entries) {
+        final qte = entry.value;
+        if (qte <= 0) continue;
+
+        // Retire la quantité du troupeau source (lots les plus anciens d'abord).
+        var reste = qte;
+        final lotsSource = await _db.getLots(
+          troupeauId: troupeauSourceId,
+          proprietaireId: proprietaireId,
+          categorie: entry.key,
+        )
+          ..sort((a, b) => a.dateNaissance.compareTo(b.dateNaissance));
+        for (final lot in lotsSource) {
+          if (reste <= 0) break;
+          if (lot.quantite <= reste) {
+            reste -= lot.quantite;
+            await _db.deleteLot(lot.id!);
+          } else {
+            await _db.updateLotQuantite(lot.id!, lot.quantite - reste);
+            reste = 0;
+          }
         }
+        prelevement[entry.key] = qte - reste; // réellement prélevé
       }
 
-      // Ajoute la quantité prélevée au nouveau troupeau (solde d'ouverture).
-      await _db.insertLot(LotAnimal(
+      await _ecrireCheptelOuverture(
         troupeauId: nouveauId,
         proprietaireId: proprietaireId,
-        categorie: entry.key,
-        quantite: qte,
-        dateNaissance: DateTime.now(),
-      ));
-      await _db.insertMouvement(Mouvement(
-        troupeauId: nouveauId,
-        proprietaireId: proprietaireId,
-        type: TypeMouvement.report,
-        categorie: entry.key,
-        quantite: qte,
-        date: DateTime.now(),
-        notes: 'Scission depuis un troupeau existant',
-      ));
+        cheptel: prelevement,
+        note: 'Scission depuis un troupeau existant',
+      );
     }
 
     _troupeaux = await _db.getTroupeaux();
@@ -385,4 +425,18 @@ class TroupeauProvider extends ChangeNotifier {
     _isLoading = value;
     notifyListeners();
   }
+}
+
+/// Un bloc "propriétaire + cheptel" saisi à la création d'un troupeau.
+class BlocProprietaireCheptel {
+  final int proprietaireId;
+  final Map<CategorieAnimal, int> cheptel;
+  const BlocProprietaireCheptel(this.proprietaireId, this.cheptel);
+}
+
+/// Un bloc "troupeau + cheptel" saisi à la création d'un propriétaire.
+class BlocTroupeauCheptel {
+  final int troupeauId;
+  final Map<CategorieAnimal, int> cheptel;
+  const BlocTroupeauCheptel(this.troupeauId, this.cheptel);
 }

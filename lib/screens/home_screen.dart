@@ -8,6 +8,7 @@ import '../models/models.dart';
 import '../providers/troupeau_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/carte_situation.dart';
+import 'ajouter_cheptel_screen.dart';
 import 'fiche_screen.dart';
 import 'historique_screen.dart';
 import 'inventaire_screen.dart';
@@ -448,6 +449,17 @@ class HomeScreen extends StatelessWidget {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const ScinderTroupeauScreen()));
                 },
               ),
+              if (context.read<TroupeauProvider>().troupeauSelectionne != null)
+                ListTile(
+                  leading: const Icon(Icons.person_add_alt_1, color: Colors.blue),
+                  title: Text('Ajouter un propriétaire à ce troupeau', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                  subtitle: Text('Ajoute un propriétaire (et son cheptel) au troupeau « ${context.read<TroupeauProvider>().troupeauSelectionne!.nom} ».'),
+                  onTap: () {
+                    final t = context.read<TroupeauProvider>().troupeauSelectionne!;
+                    Navigator.pop(ctx);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => AjouterCheptelScreen(troupeauFixe: t)));
+                  },
+                ),
               const SizedBox(height: 8),
             ],
           ),
